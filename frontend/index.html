@@ -1,0 +1,3867 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MULTI-CHAT</title>
+<script src="https://unpkg.com/vue@3.5.31/dist/vue.global.prod.js"></script>
+<style>
+  :root {
+    /* ── 背景层次 ── */
+    --bg:         #f0f4ff;
+    --panel:      #ffffff;
+    --card:       #f7f9ff;
+    --card-hover: #edf1fc;
+    --border:     rgba(79,142,247,0.12);
+    --border-mid: rgba(79,142,247,0.22);
+
+    /* ── 文字层次 ── */
+    --text:       #1a2240;
+    --text-dim:   #8894b4;
+    --text-sub:   #5a6a90;
+
+    /* ── 品牌色（蓝色不变）── */
+    --blue:       #3b82f6;
+    --blue-dim:   rgba(59,130,246,0.10);
+    --blue-glow:  rgba(59,130,246,0.30);
+
+    /* ── 功能色 ── */
+    --gold:       #f59e0b;
+    --gold-dim:   rgba(245,158,11,0.10);
+    --green:      #10b981;
+    --red:        #ef4444;
+
+    /* ═══ Glass Morphism 新增变量 ═══ */
+    --glass-bg:       rgba(255,255,255,0.72);
+    --glass-border:   rgba(255,255,255,0.50);
+    --glass-shadow:   0 8px 32px rgba(59,130,246,0.08);
+    --glass-hover-shadow: 0 12px 40px rgba(59,130,246,0.14);
+
+    /* ── 圆角体系 ── */
+    --radius-sm:  6px;
+    --radius-md:  8px;
+    --radius-lg:  12px;
+    --radius-xl:  16px;
+    --radius-2xl: 20px;
+    --radius-full:9999px;
+
+    /* ── 动效曲线 ── */
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* ── 装饰光晕 ── */
+    --glow-blue:  radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%);
+    --glow-purple: radial-gradient(circle, rgba(139,92,246,0.08) 0%, transparent 70%);
+
+    /* ── 过渡 ── */
+    --transition-fast: 0.15s var(--ease-smooth);
+    --transition-base: 0.25s var(--ease-smooth);
+    --transition-spring: 0.4s var(--ease-spring);
+  }
+
+  /* 深色主题 - 多层灰度系统（参考 OpenMAIC oklch 层次） */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      /* ── 4层灰度背景（营造深度层次）── */
+      --bg:         #0b0e14;          /* L0: 最底层 */
+      --panel:      #12161f;          /* L1: 面板底 */
+      --card:       #181d28;          /* L2: 卡片层 */
+      --card-hover: #1e2433;          /* L2.5: hover */
+
+      /* ── 边框：半透明而非纯色 ── */
+      --border:     rgba(255,255,255,0.07);
+      --border-mid: rgba(255,255,255,0.13);
+
+      /* ── 文字层次（非纯白，降低疲劳）── */
+      --text:       #e8eaed;
+      --text-dim:   #6b7280;
+      --text-sub:   #9ca3af;
+
+      /* ── 品牌色（暗色下提亮）── */
+      --blue:       #60a5fa;
+      --blue-dim:   rgba(96,165,250,0.12);
+      --blue-glow:  rgba(96,165,250,0.35);
+      --gold:       #fbbf24;
+      --gold-dim:   rgba(251,191,36,0.12);
+      --green:      #34d399;
+      --red:        #f87171;
+
+      /* ═══ Glass Morphism 暗色 ═══ */
+      --glass-bg:       rgba(18,22,31,0.82);
+      --glass-border:   rgba(255,255,255,0.08);
+      --glass-shadow:   0 8px 32px rgba(0,0,0,0.30);
+      --glass-hover-shadow: 0 12px 40px rgba(0,0,0,0.40);
+
+      /* ── 装饰光晕（暗色增强）── */
+      --glow-blue:  radial-gradient(circle, rgba(96,165,250,0.10) 0%, transparent 70%);
+      --glow-purple: radial-gradient(circle, rgba(139,92,246,0.06) 0%, transparent 70%);
+    }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body, #app { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(79,142,247,0.25); border-radius: 2px; }
+
+  /* ─── 顶栏 ─── */
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+    height: 52px;
+    display: flex; align-items: center; padding: 0 20px; gap: 12px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--glass-border);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .topbar {
+      background: var(--glass-bg);
+      border-bottom-color: var(--glass-border);
+    }
+  }
+
+  .logo {
+    font-size: 16px; font-weight: 800; letter-spacing: 1px;
+    color: var(--text); user-select: none;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    background: rgba(99,102,241,0.05);
+    border: 1px solid rgba(99,102,241,0.2);
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .logo:hover {
+    background: rgba(99,102,241,0.1);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99,102,241,0.2);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .logo {
+      background: rgba(99,102,241,0.1);
+      border-color: rgba(99,102,241,0.3);
+      color: #e5e7eb;
+    }
+    .logo:hover {
+      background: rgba(99,102,241,0.15);
+      box-shadow: 0 4px 12px rgba(99,102,241,0.3);
+    }
+  }
+
+  .logo::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(99,102,241,0.1), transparent);
+    animation: techScan 3s infinite linear;
+    z-index: -1;
+  }
+
+  @keyframes techScan {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  .logo-text {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .logo-part {
+    position: relative;
+    transition: all 0.3s ease;
+  }
+
+  .logo-multi {
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  .logo-chat {
+    color: var(--blue);
+    font-weight: 900;
+    background: linear-gradient(135deg, var(--blue), #8b5cf6);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .logo-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 8px;
+    background: linear-gradient(135deg, var(--blue), #8b5cf6);
+    color: white;
+    border-radius: 12px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    box-shadow: 0 3px 10px rgba(99,102,241,0.3);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .logo-badge::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    animation: badgeShine 2s infinite;
+  }
+
+  @keyframes badgeShine {
+    0% { left: -100%; }
+    100% { left: 100%; }
+  }
+
+  /* ═════ 动效库（参考 OpenMAIC Motion） ═════ */
+
+  /* 入场：从下方淡入 + 轻微上浮 */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* 入场：缩放 + 淡入（Hero 用） */
+  @keyframes fadeInScale {
+    from { opacity: 0; transform: scale(0.96); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  /* Shimmer 扫光效果 */
+  @keyframes shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+
+  /* 光晕脉冲呼吸 */
+  @keyframes glowPulse {
+    0%, 100% { opacity: 0.6; transform: scale(1); }
+    50%      { opacity: 1;   transform: scale(1.05); }
+  }
+
+  /* 边框呼吸 */
+  @keyframes borderBreathe {
+    0%, 100% { border-color: rgba(59,130,246,0.15); }
+    50%      { border-color: rgba(59,130,246,0.35); }
+  }
+
+  /* 浮动 */
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-4px); }
+  }
+
+  /* 微光旋转 */
+  @keyframes spin-glow {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  .topbar-spacer { flex: 1; }
+  .topbar-btn {
+    height: 30px; padding: 0 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-full);
+    background: var(--glass-bg);
+    backdrop-filter: blur(8px);
+    color: var(--text-sub);
+    font-size: 12px; font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex; align-items: center; gap: 5px;
+    white-space: nowrap;
+  }
+  .topbar-btn:hover {
+    border-color: var(--blue); color: var(--text);
+    background: rgba(59,130,246,0.06);
+    box-shadow: 0 2px 8px rgba(59,130,246,0.1);
+  }
+  .topbar-btn.back-btn { color: var(--text-dim); }
+
+  /* ─── 按钮 ─── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 18px; border-radius: 8px; border: none;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-primary {
+    background: var(--blue); color: #fff;
+  }
+  .btn-primary:hover { background: #3a7bf5; box-shadow: 0 4px 16px var(--blue-glow); }
+  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
+  .btn-ghost {
+    background: transparent; color: var(--text-sub);
+    border: 1px solid var(--border-mid);
+  }
+  .btn-ghost:hover { color: var(--text); border-color: var(--border-mid); background: var(--card); }
+  .btn-danger { background: transparent; color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+  .btn-danger:hover { background: rgba(248,113,113,0.1); }
+
+  /* ─── 页面容器 ─── */
+  .page { min-height: 100vh; padding-top: 52px; }
+
+  /* ═════ Glass Morphism 工具类 ═════ */
+  .glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    transition:
+      background var(--transition-base),
+      box-shadow var(--transition-base),
+      border-color var(--transition-base),
+      transform var(--transition-base);
+  }
+  .glass-panel:hover {
+    box-shadow: var(--glass-hover-shadow);
+    background: rgba(255,255,255,0.82);
+    border-color: rgba(59,130,246,0.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    .glass-panel {
+      background: var(--glass-bg);
+      border-color: var(--glass-border);
+    }
+    .glass-panel:hover {
+      background: rgba(18,22,31,0.90);
+      border-color: rgba(96,165,250,0.18);
+    }
+  }
+
+  /* Pill 药丸按钮 */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 14px;
+    border-radius: var(--radius-full);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .pill-default {
+    background: var(--card);
+    color: var(--text-sub);
+    border-color: var(--border);
+  }
+  .pill-default:hover {
+    color: var(--blue);
+    border-color: var(--border-mid);
+    background: var(--card-hover);
+  }
+  .pill-active {
+    background: var(--blue-dim);
+    color: var(--blue);
+    border-color: rgba(59,130,246,0.25);
+  }
+
+  /* 入场动画类（通过 Vue 的 :style 或 class 控制） */
+  .anim-fade-in-up {
+    animation: fadeInUp 0.5s var(--ease-spring) both;
+  }
+  .anim-fade-in-scale {
+    animation: fadeInScale 0.6s var(--ease-spring) both;
+  }
+  .anim-delay-1 { animation-delay: 0.1s; }
+  .anim-delay-2 { animation-delay: 0.25s; }
+  .anim-delay-3 { animation-delay: 0.35s; }
+
+  /* Shimmer 加载效果 */
+  .shimmer-text {
+    background: linear-gradient(
+      90deg,
+      var(--card) 0%,
+      var(--card-hover) 50%,
+      var(--card) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+    border-radius: 4px;
+    color: transparent !important;
+  }
+
+  /* ════════════════════════════════════
+     首页
+  ════════════════════════════════════ */
+  .home-wrap {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+  }
+
+  /* hero */
+  .hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 36px 40px;
+    background:
+      linear-gradient(135deg, #e8f0ff 0%, #f0f7ff 50%, #eef2ff 100%);
+    border: 1px solid var(--border-mid);
+    border-radius: var(--radius-xl);
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--glass-shadow);
+  }
+  /* Hero 装饰光晕（双圆呼吸） */
+  .hero::before {
+    content: '';
+    position: absolute; top: -80px; right: -60px;
+    width: 280px; height: 280px;
+    background: radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%);
+    pointer-events: none;
+    animation: glowPulse 5s ease-in-out infinite;
+  }
+  .hero::after {
+    content: '';
+    position: absolute; bottom: -60px; left: -40px;
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(139,92,246,0.08) 0%, transparent 70%);
+    pointer-events: none;
+    animation: glowPulse 7s ease-in-out infinite reverse;
+  }
+  .hero-left { flex: 1; }
+  .hero-eyebrow {
+    font-size: 11px; font-weight: 600; letter-spacing: 1px;
+    color: var(--blue); text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .hero-title {
+    font-size: 26px; font-weight: 800; line-height: 1.25;
+    color: var(--text); margin-bottom: 10px;
+  }
+  .hero-title em { color: var(--blue); font-style: normal; }
+  .hero-desc {
+    font-size: 13px; color: var(--text-sub);
+    line-height: 1.65; max-width: 380px;
+  }
+  .hero-right { flex-shrink: 0; }
+  .hero-cta {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 28px;
+    background: var(--blue); color: #fff;
+    border: none; border-radius: 10px;
+    font-size: 14px; font-weight: 700;
+    cursor: pointer; transition: all 0.2s;
+    box-shadow: 0 4px 20px var(--blue-glow);
+  }
+  .hero-cta:hover { background: #3a7bf5; transform: translateY(-2px); box-shadow: 0 8px 28px var(--blue-glow); }
+
+  /* 历史区 */
+  .section-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .section-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.8px;
+    color: var(--text-dim); text-transform: uppercase;
+  }
+  .history-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .hcard {
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-xl);
+    padding: 16px 18px;
+    cursor: pointer;
+    transition:
+      transform var(--transition-base),
+      box-shadow var(--transition-base),
+      border-color var(--transition-base),
+      background var(--transition-base);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: var(--glass-shadow);
+  }
+  .hcard:hover {
+    transform: translateY(-2px) scale(1.005);
+    border-color: rgba(59,130,246,0.25);
+    background: rgba(255,255,255,0.85);
+    box-shadow: 0 12px 36px rgba(59,130,246,0.12), 0 4px 12px rgba(0,0,0,0.04);
+  }
+  .hcard-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .hcard-title {
+    font-size: 14px; font-weight: 600; color: var(--text);
+    line-height: 1.5; flex: 1;
+    overflow: hidden; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .hcard-state {
+    flex-shrink: 0;
+    font-size: 11px; font-weight: 500;
+    border-radius: 5px; padding: 2px 8px;
+    white-space: nowrap;
+  }
+  .hcard-mid {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .hcard-avatars {
+    display: flex;
+    flex-shrink: 0;
+  }
+  .hcard-av {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700; color: #fff;
+    border: 2px solid var(--card);
+    margin-right: -5px;
+    flex-shrink: 0;
+  }
+  .hcard-preview {
+    font-size: 12px; color: var(--text-dim);
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    flex: 1; min-width: 0;
+    padding-left: 8px;
+  }
+  .hcard-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+    flex-shrink: 0;
+  }
+  .hcard-meta {
+    font-size: 11px; color: var(--text-dim);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .hcard-cnt {
+    background: rgba(79,142,247,0.08);
+    border-radius: 4px; padding: 1px 7px;
+    font-size: 11px; color: var(--blue);
+    font-weight: 500;
+  }
+  .hcard-del {
+    background: none; border: 1px solid transparent;
+    font-size: 11px; color: var(--text-dim);
+    cursor: pointer; padding: 3px 8px; border-radius: 5px;
+    transition: all 0.12s; white-space: nowrap;
+  }
+  .hcard-del:hover { border-color: rgba(239,68,68,0.3); color: var(--red); background: rgba(239,68,68,0.07); }
+
+  .empty-tip {
+    text-align: center; padding: 40px;
+    color: var(--text-dim); font-size: 13px;
+    background: var(--card); border: 1px dashed var(--border-mid);
+    border-radius: 12px;
+  }
+
+  /* ════════════════════════════════════
+     配置页
+  ════════════════════════════════════ */
+  .setup-wrap {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 36px 24px 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .setup-header { margin-bottom: 28px; }
+  .setup-header h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .setup-header p { font-size: 13px; color: var(--text-sub); }
+
+  .setup-block {
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 14px;
+    box-shadow: var(--glass-shadow);
+  }
+  .setup-block-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.6px;
+    color: var(--text-dim); text-transform: uppercase;
+    margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  /* agent 选择卡 */
+  .asgrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+    gap: 10px;
+  }
+  .ascard {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    padding: 11px 13px;
+    cursor: pointer;
+    transition:
+      transform var(--transition-base),
+      box-shadow var(--transition-base),
+      border-color var(--transition-base);
+    position: relative;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.03);
+  }
+  .ascard:hover {
+    border-color: rgba(59,130,246,0.25);
+    background: rgba(255,255,255,0.82);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(59,130,246,0.08);
+  }
+  .ascard.sel-leader {
+    border-color: var(--gold);
+    background: var(--gold-dim);
+  }
+  .ascard.sel-member {
+    border-color: var(--blue);
+    background: var(--blue-dim);
+  }
+  .ascard-top { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+  .ascard-avatar { width:32px;height:32px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#fff;letter-spacing:1px;flex-shrink:0; }
+  .ascard-name { font-size: 12px; font-weight: 600; color: var(--text); flex: 1; }
+  .ascard-prompt { font-size: 11px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ascard-check {
+    position: absolute; top: 7px; right: 9px;
+    font-size: 12px; font-weight: 700;
+  }
+  .ascard-actions {
+    position: absolute; top: 6px; right: 6px;
+    display: none; gap: 3px;
+  }
+  .ascard:hover .ascard-actions { display: flex; }
+  .ascard:hover .ascard-check { display: none; }
+  .ascard-btn {
+    background: none; border: 1px solid transparent;
+    font-size: 11px; color: var(--text-dim);
+    cursor: pointer; padding: 3px 8px; border-radius: 5px;
+    transition: all 0.12s; white-space: nowrap;
+  }
+  .ascard-btn:hover { border-color: var(--border-mid); color: var(--text); background: var(--card-hover); }
+  .ascard-btn.ascard-del:hover { border-color: rgba(239,68,68,0.3); color: var(--red); background: rgba(239,68,68,0.07); }
+
+  /* 话题 */
+  .topic-box {
+    width: 100%; padding: 12px 14px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--text); font-size: 14px;
+    resize: none; outline: none; font-family: inherit; line-height: 1.55;
+    transition: border-color 0.15s;
+  }
+  .topic-box:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.1), 0 1px 8px rgba(59,130,246,0.08);
+  }
+  .topic-title-input {
+    width: 100%; padding: 10px 14px; margin-bottom: 8px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--text); font-size: 14px;
+    font-weight: 600; outline: none; font-family: inherit;
+    transition: border-color 0.15s; box-sizing: border-box;
+  }
+  .topic-title-input:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.1), 0 1px 8px rgba(59,130,246,0.08);
+  }
+  .topic-title-input::placeholder { font-weight: 400; color: var(--text-dim); }
+
+  /* 背景材料上传 */
+  .material-section { margin-top: 12px; }
+  .material-label { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; }
+  .material-list { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; }
+  .material-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border-radius: 8px;
+    background: var(--card); border: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .mi-icon { font-size: 14px; }
+  .mi-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mi-size { color: var(--text-dim); font-size: 11px; flex-shrink: 0; }
+  .mi-del {
+    background: none; border: 1px solid transparent;
+    font-size: 11px; color: var(--text-dim); cursor: pointer;
+    padding: 2px 7px; border-radius: 4px; transition: all 0.12s;
+  }
+  .mi-del:hover { border-color: rgba(239,68,68,0.3); color: var(--red); background: rgba(239,68,68,0.07); }
+  .material-upload-btn {
+    display: inline-flex; align-items: center;
+    padding: 5px 12px; border-radius: 7px;
+    border: 1px dashed var(--border-mid); background: transparent;
+    font-size: 12px; color: var(--text-sub); cursor: pointer;
+    transition: all 0.12s;
+  }
+  .material-upload-btn:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-dim); }
+  .material-hint { font-size: 11px; color: var(--text-dim); margin-left: 8px; }
+
+
+  .topic-box::placeholder { color: var(--text-dim); }
+
+  .setup-actions {
+    display: flex; justify-content: flex-end; gap: 10px;
+    padding-top: 4px;
+  }
+
+  /* ════════════════════════════════════
+     会谈页（全高布局）
+  ════════════════════════════════════ */
+  .chat-layout {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding-top: 52px;
+  }
+
+  /* 参与者条 */
+  .pbar {
+    flex-shrink: 0;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .pbar-label { font-size: 11px; color: var(--text-dim); margin-right: 2px; }
+  .pchip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 12px; border-radius: 20px;
+    font-size: 11px; border: 1px solid; white-space: nowrap;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .pchip:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(59,130,246,0.1);
+  }
+  .pchip-role { font-size: 10px; opacity: 0.55; margin-left: 2px; }
+
+  /* 会谈页顶栏 — Glass Morphism */
+  .chat-topbar {
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  .chat-topbar .pbar {
+    border-bottom: none;
+    background: transparent;
+  }
+
+  /* 议程进度条 */
+  .agenda-bar {
+    display: flex; gap: 0; padding: 0 20px 8px;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .agenda-step {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 11px; white-space: nowrap; padding: 0 8px;
+    position: relative; flex-shrink: 0;
+  }
+  .agenda-step:not(:last-child)::after {
+    content: ''; position: absolute; right: 0; top: 50%;
+    transform: translateY(-50%);
+    width: 1px; height: 10px; background: var(--border);
+  }
+  .agenda-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    border: 2px solid var(--text-dim); flex-shrink: 0;
+  }
+  .agenda-step.agenda-done .agenda-dot { background: var(--blue); border-color: var(--blue); }
+  .agenda-step.agenda-done .agenda-title { color: var(--text-dim); }
+  .agenda-step.agenda-active .agenda-dot { background: #3b82f6; border-color: #3b82f6; animation: pulse 1.2s infinite; }
+  .agenda-step.agenda-active .agenda-title { color: var(--text); font-weight: 600; }
+  .agenda-step.agenda-pending .agenda-title { color: var(--text-dim); }
+
+  /* 嘉宾准备横幅 — Glass + Shimmer */
+  .guest-preparing-banner {
+    flex-shrink: 0;
+    padding: 10px 20px;
+    background: rgba(79,142,247,0.05);
+    border-bottom: 1px solid var(--glass-border);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .gp-title { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; }
+  .gp-list { display: flex; gap: 12px; flex-wrap: wrap; }
+  .gp-item { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+  .gp-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .gp-status { font-size: 10px; }
+  .gp-ready { color: #22c55e; }
+  .gp-preparing { color: var(--text-dim); }
+
+  /* 议程确认面板 */
+  .agenda-confirm-panel {
+    flex-shrink: 0;
+    margin: 12px 20px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .acp-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    background: rgba(79,142,247,0.07);
+    border-bottom: 1px solid var(--border);
+    font-size: 13px; font-weight: 600;
+  }
+  .acp-sections { padding: 6px 0; max-height: 180px; overflow-y: auto; }
+  .acp-section {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 14px;
+  }
+  .acp-order {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--blue); color: #fff;
+    font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: 1px;
+  }
+  .acp-name { font-size: 13px; font-weight: 600; }
+  .acp-desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  .acp-actions {
+    display: flex; gap: 8px; align-items: center;
+    padding: 10px 14px;
+    border-top: 1px solid var(--border);
+  }
+  .acp-input {
+    flex: 1; padding: 6px 10px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 12px;
+    outline: none; font-family: inherit;
+  }
+  .acp-input:focus { border-color: var(--blue); }
+
+  /* 议程气泡（对话流版）— Glass Card */
+  .agenda-bubble { padding: 0 !important; overflow: hidden; min-width: 300px;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  .ab-title {
+    padding: 10px 14px 8px; font-size: 13px; font-weight: 700;
+    border-bottom: 1px solid var(--glass-border);
+    background: rgba(59,130,246,0.06);
+  }
+  .ab-sections { padding: 6px 0; max-height: 260px; overflow-y: auto; }
+  .ab-sec { display: flex; align-items: flex-start; gap: 10px; padding: 7px 14px;
+    transition: background 0.15s;
+  }
+  .ab-sec:hover { background: rgba(59,130,246,0.04); }
+  .ab-order {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--blue); color: #fff;
+    font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: 1px;
+    box-shadow: 0 2px 6px rgba(59,130,246,0.25);
+  }
+  .ab-name { font-size: 12px; font-weight: 600; color: var(--text); }
+  .ab-desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  .ab-footer { padding: 10px 14px; border-top: 1px solid var(--glass-border); background: rgba(255,255,255,0.03); }
+  .ab-confirm-btn {
+    width: 100%; height: 36px;
+    background: #22c55e; color: #fff;
+    border: none; border-radius: 18px; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .ab-confirm-btn:hover {
+    background: #16a34a;
+    box-shadow: 0 4px 12px rgba(34,197,94,0.3);
+    transform: scale(1.02);
+  }
+  /* 底部文字发送按钮 */
+  .agenda-send-btn {
+    height: 42px; padding: 0 20px; white-space: nowrap;
+    background: #7c3aed; color: #fff;
+    border: none; border-radius: 21px; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s; flex-shrink: 0;
+    align-self: flex-end;
+  }
+  .agenda-send-btn:not(:disabled) { background: var(--blue); }
+  .agenda-send-btn:hover:not(:disabled) {
+    background: #6d28d9;
+    box-shadow: 0 4px 14px rgba(124,58,237,0.35);
+    transform: scale(1.03);
+  }
+  .agenda-send-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* 状态提示卡 */
+  .state-tip-card {
+    display: flex; align-items: center; gap: 7px;
+    padding: 6px 14px; border-radius: var(--radius-full);
+    font-size: 11px; color: var(--text-dim);
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    align-self: center; margin: 4px 0;
+  }
+  .state-tip-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+  /* 板块分隔线 */
+  .section-divider {
+    display: flex; align-items: center; gap: 10px;
+    margin: 6px 0; color: var(--text-dim); font-size: 11px;
+  }
+  .sd-line { flex: 1; height: 1px; background: var(--glass-border); }
+  .sd-label { white-space: nowrap; padding: 0 4px; }
+
+  /* 主持人消息特殊样式 */
+  .host-bubble {
+    background: var(--gold-dim) !important;
+    border-color: rgba(245,166,35,0.3) !important;
+  }
+  .role-badge {
+    padding: 2px 8px; border-radius: 10px;
+    font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .host-badge { background: rgba(245,166,35,0.15); color: #f5a623; }
+
+  /* 控制按钮 — Pill 化 */
+  .ctrl-btn {
+    height: 26px; border-radius: 13px; border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: var(--text); font-size: 11px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    padding: 0 8px;
+    transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1);
+    flex-shrink: 0;
+  }
+  .ctrl-btn:hover {
+    background: var(--blue); color: #fff;
+    border-color: transparent;
+    box-shadow: 0 2px 10px rgba(59,130,246,0.25);
+    transform: scale(1.05);
+  }
+  .ctrl-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .ctrl-resume { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.3); color: #22c55e; }
+  .ctrl-call-wrap { display: flex; gap: 4px; align-items: center; }
+  .ctrl-call-btn {
+    height: 26px; padding: 0 12px; white-space: nowrap;
+    background: #7c3aed; color: #fff;
+    border: none; border-radius: 6px; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s; flex-shrink: 0;
+    writing-mode: horizontal-tb;
+  }
+  .ctrl-call-btn:hover:not(:disabled) { background: #6d28d9; }
+  .ctrl-call-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .ctrl-select {
+    height: 26px; padding: 0 6px; border-radius: 6px;
+    background: var(--card); border: 1px solid var(--border);
+    color: var(--text); font-size: 11px; outline: none;
+  }
+
+  /* 会议报告卡 */
+  .report-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg); overflow: hidden; max-width: 800px;
+    box-shadow: var(--glass-shadow);
+  }
+  .report-card {
+    max-width: 680px;
+    margin: 8px auto;
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    box-shadow: 0 4px 24px rgba(59,130,246,0.06);
+    animation: fadeInUp 0.4s ease-out both;
+  }
+  .rc-header {
+    padding: 10px 14px;
+    background: rgba(59,130,246,0.07);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--glass-border);
+    font-size: 12px; font-weight: 600;
+  }
+  .rc-body {
+    padding: 14px; font-size: 13px; line-height: 1.7;
+    white-space: pre-wrap; max-height: 400px; overflow-y: auto;
+  }
+  .chat-msgs {
+    flex: 1; overflow-y: auto;
+    padding: 24px 20px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+
+  .msg { display: flex; gap: 10px; max-width: 800px; }
+  .msg.user-msg { flex-direction: row-reverse; margin-left: auto; }
+  .msg-av {
+    width: 34px; height: 34px; flex-shrink: 0;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600; color: #fff; letter-spacing: 1px;
+  }
+  .msg-body { max-width: 640px; }
+  .user-msg .msg-body { margin-left: auto; }
+  .msg-name {
+    font-size: 11px; color: var(--text-dim);
+    margin-bottom: 4px; display: flex; gap: 5px; align-items: center;
+  }
+  .user-msg .msg-name { justify-content: flex-end; }
+  .msg-bubble {
+    padding: 10px 14px; border-radius: var(--radius-lg);
+    font-size: 13px; line-height: 1.65;
+    white-space: pre-wrap;
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    width: fit-content; max-width: 100%;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    transition:
+      background var(--transition-base),
+      border-color var(--transition-base);
+  }
+  .user-msg .msg-bubble {
+    background: rgba(59,130,246,0.08);
+    border-color: rgba(59,130,246,0.20);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    margin-left: auto;
+  }
+  .host-bubble {
+    background: var(--gold-dim) !important;
+    border-color: rgba(245,166,35,0.3) !important;
+  }
+
+  .plan-card {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 13px 15px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(59,130,246,0.15);
+    border-radius: var(--radius-lg);
+    font-size: 13px; line-height: 1.65;
+    white-space: pre-wrap;
+    max-width: 800px;
+    box-shadow: 0 2px 12px rgba(59,130,246,0.04);
+  }
+  .plan-icon { font-size: 16px; flex-shrink: 0; margin-top: 2px; }
+
+  .typing-cursor {
+    display: inline-block; width: 2px; height: 13px;
+    background: var(--text-sub); margin-left: 2px;
+    vertical-align: middle; animation: blink 0.8s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* 状态栏 — Glass */
+  .sbar {
+    flex-shrink: 0;
+    padding: 5px 20px; font-size: 11px; color: var(--text-dim);
+    border-top: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    display: flex; align-items: center; gap: 5px;
+  }
+  .sdot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--text-dim); flex-shrink: 0;
+  }
+  .sdot.on { background: var(--green); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* 输入区 */
+  .chat-input {
+    flex-shrink: 0;
+    padding: 12px 20px;
+    display: flex; gap: 8px; align-items: flex-end;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--glass-border);
+  }
+  .ci-inner { flex: 1; }
+  .ci-ta {
+    width: 100%; padding: 11px 14px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--text); font-size: 13px;
+    resize: none; outline: none; font-family: inherit;
+    line-height: 1.5; min-height: 42px; max-height: 100px; overflow-y: auto;
+    transition: border-color 0.15s; box-sizing: border-box;
+    scrollbar-width: none;
+  }
+  .ci-ta::-webkit-scrollbar { width: 0; }
+  .ci-ta:hover::-webkit-scrollbar { width: 5px; }
+  .ci-ta:hover { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.18) transparent; }
+  .ci-ta::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 3px; }
+  .ci-ta:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.12), 0 1px 8px rgba(59,130,246,0.08);
+  }
+  .ci-ta::placeholder { color: var(--text-dim); }
+  .send-btn {
+    width: 40px; height: 40px; border-radius: 20px; border: none;
+    background: var(--blue); color: #fff; font-size: 15px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .send-btn:hover:not(:disabled) {
+    background: #2563eb;
+    box-shadow: 0 4px 16px rgba(59,130,246,0.35);
+    transform: scale(1.08);
+  }
+  .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  /* 议程发送按钮：灰色→紫色 */
+  .ci-send-icon {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    width: 28px; height: 28px; border-radius: 8px; border: none;
+    background: #94a3b8; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: background 0.15s; flex-shrink: 0;
+  }
+  .ci-send-icon:not(:disabled) { background: #7c3aed; }
+  .ci-send-icon:hover:not(:disabled) { background: #6d28d9; }
+  .ci-send-icon:disabled { opacity: 0.4; cursor: not-allowed; }
+  .agenda-confirm-btn {
+    height: 36px; padding: 0 18px; white-space: nowrap;
+    background: var(--blue); color: #fff;
+    border: none; border-radius: 18px; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .agenda-confirm-btn:hover {
+    background: #2563eb;
+    box-shadow: 0 4px 14px rgba(59,130,246,0.3);
+    transform: scale(1.03);
+  }
+
+  /* ─── 弹窗 ─── */
+  .overlay {
+    position: fixed; inset: 0; z-index: 300;
+    background: rgba(20,40,100,0.45); backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal {
+    background: var(--glass-bg);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-xl); padding: 24px;
+    width: 520px; max-width: 100%; max-height: 88vh; overflow-y: auto;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.18), 0 8px 24px rgba(59,130,246,0.06);
+  }
+  .modal-hd { font-size: 16px; font-weight: 700; margin-bottom: 20px; }
+
+  .fg { margin-bottom: 15px; }
+  .fl { display: block; font-size: 11px; font-weight: 600; color: var(--text-dim); margin-bottom: 5px; letter-spacing: 0.3px; }
+  .fi, .fs, .fta {
+    width: 100%; padding: 9px 12px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 9px; color: var(--text); font-size: 13px;
+    outline: none; font-family: inherit; transition: border-color 0.15s;
+  }
+  .fi:focus, .fs:focus, .fta:focus { border-color: var(--blue); }
+  .fta { resize: vertical; min-height: 76px; line-height: 1.5; }
+  .fs { appearance: none; cursor: pointer; }
+  .fhint { font-size: 11px; color: var(--text-dim); margin-top: 4px; line-height: 1.5; }
+  .frow { display: flex; gap: 10px; }
+  .frow .fg { flex: 1; }
+
+  .emoji-grid {
+    display: grid; grid-template-columns: repeat(9, 34px); gap: 5px; margin-top: 5px;
+  }
+  .emoji-btn {
+    width: 34px; height: 34px; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--card);
+    font-size: 17px; cursor: pointer; transition: all 0.12s;
+  }
+  .emoji-btn.sel, .emoji-btn:hover { border-color: var(--blue); background: var(--blue-dim); }
+
+  .color-row { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 5px; }
+  .cdot {
+    width: 28px; height: 28px; border-radius: 50%;
+    cursor: pointer; transition: all 0.15s;
+    outline: 3px solid transparent;
+  }
+  .cdot:hover { opacity: 0.85; }
+  .cdot.sel { outline: 3px solid #999; }
+
+  .leader-tog {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 13px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--border); transition: all 0.18s;
+  }
+  .leader-tog.on { border-color: var(--gold); background: var(--gold-dim); }
+  .tog-sw {
+    width: 34px; height: 19px; border-radius: 10px;
+    background: var(--border-mid); position: relative; transition: background 0.18s; flex-shrink: 0;
+  }
+  .tog-sw.on { background: var(--gold); }
+  .tog-knob {
+    position: absolute; top: 2px; left: 2px;
+    width: 15px; height: 15px; border-radius: 50%;
+    background: #fff; transition: transform 0.18s;
+  }
+  .tog-sw.on .tog-knob { transform: translateX(15px); }
+
+  .modal-ft { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+  /* 模型卡片 */
+  .mcard {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px 13px; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 9px;
+    transition: border-color 0.15s;
+  }
+  .mcard:hover { border-color: var(--border-mid); }
+  .mcard-actions { display: flex; gap: 5px; margin-left: auto; opacity: 0; transition: opacity 0.15s; }
+  .mcard:hover .mcard-actions { opacity: 1; }
+  .mbtn {
+    padding: 3px 9px; font-size: 11px; cursor: pointer;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: none; color: var(--text-dim); transition: all 0.12s;
+  }
+  .mbtn:hover { border-color: var(--border-mid); color: var(--text); }
+  .mbtn.del:hover { border-color: rgba(248,113,113,0.4); color: var(--red); background: rgba(248,113,113,0.08); }
+
+  /* 模型选择（智能体弹窗内） */
+  .model-sel-item {
+    padding: 9px 11px; border-radius: 9px; cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--card);
+    display: flex; align-items: center; gap: 8px;
+    transition: all 0.12s;
+    margin-bottom: 6px;
+  }
+  .model-sel-item:hover { border-color: var(--border-mid); background: var(--card-hover); }
+  .model-sel-item.selected { border-color: var(--blue); background: var(--blue-dim); }
+
+  /* 空提示 */
+  .empty-inline {
+    font-size: 12px; color: var(--text-dim);
+    padding: 13px 14px; background: var(--card);
+    border-radius: 9px; border: 1px dashed var(--border-mid);
+    display: flex; align-items: center; gap: 10px;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 背景装饰光晕 -->
+  <div style="position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden" aria-hidden>
+    <div style="position:absolute;top:-20%;left:-10%;width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,rgba(59,130,246,0.06)0%,transparent 70%);animation:glowPulse 6s ease-in-out infinite"></div>
+    <div style="position:absolute;bottom:-15%;right:-5%;width:500px;height:500px;border-radius:50%;background:radial-gradient(circle,rgba(139,92,246,0.05)0%,transparent 70%);animation:glowPulse 8s ease-in-out infinite reverse"></div>
+  </div>
+
+  <!-- ─── 顶栏 ─── -->
+  <header class="topbar">
+    <div class="logo">
+      <div class="logo-text">
+        <span class="logo-part logo-multi">MULTI</span>
+        <span class="logo-part logo-chat">-CHAT</span>
+      </div>
+      <div class="logo-badge">AI</div>
+    </div>
+    <div class="topbar-spacer"></div>
+    <button v-if="currentPage==='chat' || currentPage==='setup'" class="topbar-btn back-btn"
+      @click="goHome"
+      :disabled="isDiscussing && !isPaused && !isViewingHistory"
+      :title="isDiscussing && !isPaused && !isViewingHistory ? t('nav.pause_first') : t('nav.home')"
+      :style="(isDiscussing && !isPaused && !isViewingHistory) ? 'opacity:0.4;cursor:not-allowed' : ''">
+      ← {{ t('nav.home') }}
+    </button>
+    <button class="topbar-btn" @click="showSmartModal=true"
+      :style="smartConfiguredCount > 0 ? 'color:var(--green)' : ''">
+      <span style="font-size:15px">⚡</span> {{ smartConfiguredCount > 0 ? `${t('nav.smart')} (${smartConfiguredCount})` : t('nav.smart') }}
+    </button>
+    <!-- 中英切换 -->
+    <button class="topbar-btn" @click="toggleLang"
+      :style="{ fontWeight: '600', color: 'var(--blue)', border: '1px solid var(--blue)30' }"
+      :title="'zh' === currentLang ? 'Switch to English' : '切换为中文'">
+      {{ 'zh' === currentLang ? '中/En' : 'En/中' }}
+    </button>
+  </header>
+
+  <!-- ════════════════════════════════════
+       智能增强配置（统一弹窗，3 Tab）
+  ════════════════════════════════════ -->
+  <div v-if="showSmartModal" class="overlay" @click.self="showSmartModal=false">
+    <div class="modal" style="width:580px;max-height:85vh;display:flex;flex-direction:column">
+
+      <!-- 标题 -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border)">
+        <div style="font-size:17px;font-weight:700;color:#1e293b">{{ t('smart.title') }}</div>
+        <button style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-dim);line-height:1" @click="showSmartModal=false">×</button>
+      </div>
+
+      <!-- Tab 切换栏 -->
+      <div style="display:flex;gap:4px;margin-bottom:20px;background:var(--card);border-radius:10px;padding:4px">
+        <button v-for="t in smartTabs" :key="t.key"
+          style="flex:1;height:36px;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s"
+          :style="smartTab===t.key ? 'background:var(--blue);color:#fff' : 'background:transparent;color:var(--text-sub)'"
+          @click="smartTab=t.key">{{ t.label }}</button>
+      </div>
+
+      <!-- Tab 内容区 -->
+      <div style="flex:1;overflow-y:auto;min-height:0">
+
+        <!-- ── Tab 1: 联网搜索 ── -->
+        <div v-if="smartTab==='search'">
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:14px;font-weight:500;color:#334155">
+              <span>{{ t('smart.title') }}</span>
+            </div>
+            <div style="font-size:13px;color:#64748b;line-height:1.7;margin-bottom:16px">
+              {{ t('smart.tavily_desc') }}
+            </div>
+            <div class="fg" style="margin-bottom:12px">
+              <label class="fl" style="font-size:13px;color:#475569">Tavily API Key</label>
+              <input class="finput" v-model="tavilyKeyInput" type="password" autocomplete="new-password" style="font-family:monospace;font-size:14px;width:100%;height:44px;padding:0 14px" />
+            </div>
+            <div style="font-size:12px;color:#94a3b8">
+              获取 Key：<a href="https://tavily.com" target="_blank" style="color:#3b82f6;text-decoration:none">tavily.com</a>（{{ t('smart.tavily_free') }}）
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:16px">
+            <button class="btn btn-ghost" style="height:36px;padding:0 20px" v-if="tavilyKey" @click="tavilyKey='';tavilyKeyInput='';saveTavilyKey()">{{ t('common.clear') }}</button>
+            <button class="btn btn-primary" style="height:36px;padding:0 20px" @click="saveTavilyKey()">{{ t('common.save') }}</button>
+          </div>
+        </div>
+
+        <!-- ── Tab 2: 模型管理 ── -->
+        <div v-if="smartTab==='model'">
+          <!-- 已有模型列表（可滚动） -->
+          <div v-if="!showModelForm && editingModelIdx===-1" style="margin-bottom:14px">
+            <div v-if="userModels.length===0" style="font-size:12px;color:var(--text-dim);padding:12px 0 4px">
+              {{ t('model.no_models') }}
+            </div>
+            <div v-for="(m, idx) in userModels" :key="idx" class="mcard">
+              <img v-if="brandLogoUrl(m)" :src="brandLogoUrl(m)" style="width:20px;height:20px;border-radius:4px;object-fit:contain;flex-shrink:0" />
+              <span v-else style="font-size:17px">{{platformIcon(m.platform)}}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{m.label}}</div>
+                <div style="font-size:11px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{m.model}} · {{m.baseUrl || t('model.default_addr')}}</div>
+              </div>
+              <div class="mcard-actions">
+                <button class="mbtn" @click="editModel(idx)">{{ t('common.edit') }}</button>
+                <button class="mbtn del" @click="deleteModel(idx)">{{ t('common.delete') }}</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 添加新模型 按钮 -->
+          <div v-if="editingModelIdx===-1 && !showModelForm" style="margin-bottom:14px">
+            <button class="btn btn-ghost" style="width:100%;justify-content:center;font-size:13px;border-style:dashed"
+              @click="showModelForm=true">{{ t('model.add_new') }}</button>
+          </div>
+
+          <!-- 模型表单 -->
+          <div v-if="showModelForm || editingModelIdx>=0"
+            style="background:var(--card);border-radius:10px;padding:16px;border:1px solid var(--border);margin-bottom:14px">
+            <div style="font-size:12px;font-weight:600;color:var(--text-sub);margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+              <span>{{editingModelIdx >= 0 ? t('model.edit_model') : t('model.config_new') }}</span>
+              <button style="background:none;border:none;font-size:16px;cursor:pointer;color:var(--text-dim);line-height:1"
+                @click="cancelEditModel">×</button>
+            </div>
+            <div class="frow">
+              <div class="fg">
+                <label class="fl">{{ t('model.display_name') }}</label>
+                <input class="fi" v-model="modelForm.label" :placeholder="t('model.name_placeholder')" />
+              </div>
+              <div class="fg">
+                <label class="fl">{{ t('model.platform') }}</label>
+                <select class="fs" v-model="modelForm.platform" @change="onPlatformChange">
+                  <option value="openai">OpenAI</option>
+                  <option value="ollama">Ollama ({{ t('model.local') }})</option>
+                  <option value="qianfan">{{ t('model.qianfan') }}</option>
+                  <option value="hunyuan">{{ t('model.hunyuan') }}</option>
+                  <option value="custom">{{ t('model.custom') }}（OpenAI {{ t('model.compatible') }}）</option>
+                </select>
+              </div>
+            </div>
+            <div class="frow">
+              <div class="fg">
+                <label class="fl">{{ t('model.model_name') }}</label>
+                <input class="fi" v-model="modelForm.model"
+                  :placeholder="modelForm.platform==='ollama' ? '如：llama3、qwen2.5、deepseek-r1' : 'deepseek-chat'" />
+                <div v-if="modelForm.platform==='ollama'" class="fhint" style="color:#f59e0b">{{ t('model.ollama_hint') }}</div>
+              </div>
+              <div class="fg">
+                <label class="fl">{{ t('model.api_key') }} <span v-if="modelForm.platform==='ollama'" style="color:var(--text-dim);font-weight:400">（{{ t('model.optional') }}）</span></label>
+                <input class="fi" v-model="modelForm.apiKey" type="password"
+                  :placeholder="modelForm.platform==='ollama' ? t('model.local_no_key') : 'sk-xxxxxxxx'" autocomplete="new-password" />
+              </div>
+            </div>
+            <div class="fg">
+              <label class="fl">{{ t('model.base_url') }}</label>
+              <input class="fi" v-model="modelForm.baseUrl" placeholder="https://your-api-host/v1" />
+              <div class="fhint">{{ t('model.url_hint') }}</div>
+            </div>
+            <div v-if="testResult" :style="{fontSize:'12px',padding:'8px 12px',borderRadius:'8px',marginBottom:'10px',background:testResult.ok?'rgba(16,185,129,0.1)':'rgba(239,68,68,0.08)',border:testResult.ok?'1px solid rgba(16,185,129,0.3)':'1px solid rgba(239,68,68,0.25)',color:testResult.ok?'#059669':'#dc2626',display:'flex',alignItems:'center',gap:'6px'}">
+              <span>{{testResult.ok ? '✓' : '✗'}}</span>
+              <span>{{testResult.msg}}</span>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;align-items:center">
+              <button class="btn btn-ghost" style="font-size:12px;padding:6px 16px;display:flex;align-items:center;gap:5px"
+                :disabled="testLoading" @click="testModel">
+                <span v-if="testLoading" style="display:inline-block;width:12px;height:12px;border:2px solid var(--blue);border-top-color:transparent;border-radius:50%;animation:spin 0.7s linear infinite"></span>
+                <span>{{testLoading ? t('common.testing') : t('model.test_conn')}}</span>
+              </button>
+              <button class="btn btn-primary" style="font-size:12px;padding:6px 16px"
+                :disabled="!testResult || !testResult.ok" @click="saveModel">
+                {{editingModelIdx === -1 ? t('common.add') : t('common.save_modify')}}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Tab 3: 向量记忆 ── -->
+        <div v-if="smartTab==='memory'">
+          <!-- 本地存储状态 -->
+          <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:12px;padding:20px;margin-bottom:16px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:14px;font-weight:600;color:#166534">
+              <span>✓ {{ t('memory.local_storage') }}</span>
+              <span style="font-size:11px;font-weight:400;color:#15803d;background:rgba(22,163,74,0.12);padding:1px 8px;border-radius:10px">{{ t('memory.ready') }}</span>
+            </div>
+            <div style="font-size:12px;color:#4ade80;line-height:1.7">
+              {{ t('memory.local_desc') }}
+            </div>
+          </div>
+
+          <!-- Embedding 模型 -->
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:14px;font-weight:600;color:#334155">
+              <span>{{ t('memory.emb_config') }}</span>
+              <span v-if="embConfig.apiKey" style="font-size:11px;font-weight:400;color:#22c55e;background:rgba(34,197,94,0.1);padding:1px 8px;border-radius:10px">{{ t('memory.configured') }}</span>
+            </div>
+            <div style="font-size:12px;color:#64748b;line-height:1.7;margin-bottom:16px">
+              {{ t('memory.emb_desc') }}
+            </div>
+            <div class="frow">
+              <div class="fg">
+                <label class="fl">{{ t('memory.emb_platform') }}</label>
+                <select class="fs" v-model="embForm.platform" @change="onEmbPlatformChange">
+                  <option value="">{{ t('memory.select_platform') }}</option>
+                  <option value="dashscope">阿里百炼 DashScope</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="hunyuan">{{ t('model.hunyuan') }}</option>
+                  <option value="custom">{{ t('model.custom') }}（OpenAI {{ t('model.compatible') }}）</option>
+                </select>
+              </div>
+              <div class="fg">
+                <label class="fl">{{ t('model.api_key') }}</label>
+                <input class="fi" v-model="embForm.apiKey" type="password" autocomplete="new-password" placeholder="sk-xxxxxxxx" />
+              </div>
+            </div>
+            <div class="frow">
+              <div class="fg">
+                <label class="fl">{{ t('model.base_url') }}</label>
+                <input class="fi" v-model="embForm.baseUrl" :placeholder="t('memory.auto_or_manual')" />
+              </div>
+              <div class="fg">
+                <label class="fl">{{ t('model.model_name') }}</label>
+                <input class="fi" v-model="embForm.model" :placeholder="t('memory.auto_or_manual')" />
+              </div>
+            </div>
+            <div class="fhint" style="margin-top:6px">
+              阿里百炼 → dashscope.aliyuncs.com/compatible-mode/v1 · text-embedding-v4 (1024维)<br>
+              OpenAI → api.openai.com/v1 · text-embedding-3-small (1536维)
+            </div>
+            <div v-if="embTestResult" :style="{fontSize:'12px',padding:'8px 12px',borderRadius:'8px',marginTop:'10px',background:embTestResult.ok?'rgba(16,185,129,0.1)':'rgba(239,68,68,0.08)',border:embTestResult.ok?'1px solid rgba(16,185,129,0.3)':'1px solid rgba(239,68,68,0.25)',color:embTestResult.ok?'#059669':'#dc2626',display:'flex',alignItems:'center',gap:'6px'}">
+              <span>{{embTestResult.ok ? '✓' : '✗'}}</span>
+              <span>{{embTestResult.msg}}</span>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+              <button class="btn btn-ghost" style="height:32px;padding:0 16px;font-size:12px" v-if="embConfig.apiKey" @click="clearEmbConfig">{{ t('common.clear') }}</button>
+              <button class="btn btn-ghost" style="height:32px;padding:0 16px;font-size:12px;display:flex;align-items:center;gap:5px" :disabled="embTestLoading" @click="testEmbConnection">
+                <span v-if="embTestLoading" style="display:inline-block;width:10px;height:10px;border:2px solid var(--blue);border-top-color:transparent;border-radius:50%;animation:spin 0.7s linear infinite"></span>
+                {{ t('model.test_conn') }}
+              </button>
+              <button class="btn btn-primary" style="height:32px;padding:0 16px;font-size:12px" @click="saveEmbConfig">{{ t('common.save') }}</button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /tab content -->
+
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════
+       首页
+  ════════════════════════════════════ -->
+  <div v-if="currentPage==='home'" class="page">
+    <div class="home-wrap">
+
+      <!-- Hero -->
+      <div class="hero">
+        <div class="hero-left anim-fade-in-up anim-delay-1">
+          <div class="hero-eyebrow">Multi-Agent Discussion</div>
+          <div class="hero-title" v-html="t('home.hero_title')"></div>
+          <div class="hero-desc" v-html="t('home.hero_desc')"></div>
+        </div>
+        <div class="hero-right anim-fade-in-scale anim-delay-3">
+          <button class="hero-cta" @click="goSetup">
+            ＋ &nbsp;{{ t('home.new_meeting') }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 历史 -->
+      <div class="anim-fade-in-up anim-delay-2">
+        <div class="section-head">
+          <div class="section-title">{{ t('home.history') }}</div>
+        </div>
+        <div v-if="sessions.length===0" class="empty-tip">
+          {{ t('home.no_history') }}
+        </div>
+        <div v-else class="history-grid">
+          <div v-for="s in sessions" :key="s.id"
+            class="hcard" @click="viewSession(s)">
+            <!-- 第一行：标题 + 状态标签 -->
+            <div class="hcard-top">
+              <div class="hcard-title">{{s.discussion_title || (s.topic || '').split('\n')[0] || t('home.unnamed') }}</div>
+              <span class="hcard-state"
+                :style="s.state==='ended'
+                  ? 'background:rgba(34,197,94,0.1);color:#22c55e'
+                  : 'background:rgba(251,191,36,0.1);color:#f59e0b'">
+                {{s.state==='ended' ? t('home.completed') : t('home.incomplete')}}
+              </span>
+            </div>
+            <!-- 第二行：参与者头像 + 最新发言预览 -->
+            <div class="hcard-mid" v-if="(s.participants && s.participants.length) || s.preview">
+              <div class="hcard-avatars" v-if="s.participants && s.participants.length">
+                <div v-for="p in s.participants.slice(0,5)" :key="p.name"
+                  class="hcard-av"
+                  :style="{background: p.color}"
+                  :title="p.name + (p.is_host ? `（${t('setup.host_abbr')}）` : '')">
+                  {{p.name.slice(0,2)}}
+                </div>
+              </div>
+              <div class="hcard-preview" v-if="s.preview">{{s.preview}}</div>
+            </div>
+            <!-- 第三行：消息数 + 日期 + 删除 -->
+            <div class="hcard-footer">
+              <div class="hcard-meta">
+                <span class="hcard-cnt" v-if="s.msg_count > 0">{{s.msg_count}} {{ t('home.messages') }}</span>
+                <span>{{formatDate(s.updated_at)}}</span>
+              </div>
+              <button class="hcard-del" @click.stop="deleteSession(s.id)">{{ t('common.delete') }}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════
+       配置页
+  ════════════════════════════════════ -->
+  <div v-if="currentPage==='setup'" class="page">
+    <div class="setup-wrap">
+
+      <div class="setup-header">
+        <h2>{{ t('setup.title') }}</h2>
+        <p>{{ t('setup.subtitle') }}</p>
+      </div>
+
+      <!-- 主持人 -->
+      <div class="setup-block">
+        <div class="setup-block-title">👑 &nbsp;{{ t('setup.host') }}</div>
+        <div v-if="!sessionLeader" class="empty-inline">
+          {{ t('setup.no_host') }}
+          <button class="btn btn-ghost" style="padding:5px 12px;font-size:12px" @click="openAddAgent(true)">+ {{ t('common.add') }}</button>
+        </div>
+        <div v-else class="asgrid">
+          <div class="ascard sel-leader">
+            <div class="ascard-top">
+              <span class="ascard-avatar" :style="{background: sessionLeader.color||'#3b82f6'}">{{sessionLeader.name.slice(0,2)}}</span>
+              <span class="ascard-name">{{sessionLeader.name}}</span>
+            </div>
+            <div class="ascard-prompt">{{sessionLeader.role_prompt}}</div>
+            <div class="ascard-actions">
+              <button class="ascard-btn" @click.stop="openEditSessionAgent(sessionLeader, true)">{{ t('common.edit') }}</button>
+              <button class="ascard-btn ascard-del" @click.stop="sessionLeader=null">{{ t('common.delete') }}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 成员 -->
+      <div class="setup-block">
+        <div class="setup-block-title">{{ t('setup.members') }}</div>
+        <div v-if="sessionMembers.length===0" class="empty-inline">
+          {{ t('setup.no_members') }}
+          <button class="btn btn-ghost" style="padding:5px 12px;font-size:12px" @click="openAddAgent(false)">+ {{ t('common.add') }}</button>
+        </div>
+        <div v-else>
+          <div class="asgrid">
+            <div v-for="(agent, idx) in sessionMembers" :key="agent.id"
+              class="ascard sel-member">
+              <div class="ascard-top">
+                <span class="ascard-avatar" :style="{background: agent.color||'#3b82f6'}">{{agent.name.slice(0,2)}}</span>
+                <span class="ascard-name">{{agent.name}}</span>
+              </div>
+              <div class="ascard-prompt">{{agent.role_prompt}}</div>
+              <div class="ascard-actions">
+                <button class="ascard-btn" @click.stop="openEditSessionAgent(agent, false, idx)">{{ t('common.edit') }}</button>
+                <button class="ascard-btn ascard-del" @click.stop="sessionMembers.splice(idx,1)">{{ t('common.delete') }}</button>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:10px;text-align:right">
+            <button class="btn btn-ghost" style="padding:5px 12px;font-size:12px" @click="openAddAgent(false)">{{ t('setup.add_member') }}</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 主持风格 -->
+      <div class="setup-block">
+        <div class="setup-block-title">{{ t('setup.host_style') }}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <button v-for="s in hostStyles" :key="s.key"
+            style="padding:14px 12px;border-radius:10px;border:2px solid;cursor:pointer;text-align:left;transition:all .15s;font-size:13px;background:#fff"
+            :style="'border-color:'+s.color+';'+(hostStyle===s.key ? 'box-shadow:0 0 0 3px '+s.color+'40' : '')"
+            @click="hostStyle=s.key;localStorage.setItem(HOST_STYLE_KEY,s.key)">
+            <div style="font-weight:700" :style="'color:'+s.color">{{ s.name }}</div>
+            <div style="font-size:11px;color:#94a3b8;line-height:1.4;margin-top:2px">{{ s.desc }}</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- 话题：拆分为标题+内容 -->
+      <div class="setup-block">
+        <div class="setup-block-title">{{ t('setup.topic') }}</div>
+        <input class="topic-title-input" v-model="topicTitle"
+          :placeholder="t('setup.topic_title_ph')" />
+        <textarea class="topic-box" rows="3" v-model="topicContent"
+          :placeholder="t('setup.topic_content_ph')"></textarea>
+
+        <!-- 背景材料上传 -->
+        <div class="material-section">
+          <div class="material-label">{{ t('setup.materials') }}</div>
+          <!-- 历史材料（从历史记录复用） -->
+          <div v-if="historicMaterials.length" class="material-list" style="margin-bottom:6px">
+            <div v-for="(m, idx) in historicMaterials" :key="'hm'+idx" class="material-item" style="opacity:0.75">
+              <span class="mi-icon">📄</span>
+              <span class="mi-name">{{m.name}}</span>
+              <span class="mi-size" style="color:var(--text-dim)">{{ t('setup.historic_material') }}</span>
+              <button class="mi-del" @click="historicMaterials.splice(idx,1)">{{ t('common.remove') }}</button>
+            </div>
+          </div>
+          <!-- 本次新上传 -->
+          <div class="material-list" v-if="pendingFiles.length">
+            <div v-for="(f, idx) in pendingFiles" :key="idx" class="material-item">
+              <span class="mi-icon">📄</span>
+              <span class="mi-name">{{f.name}}</span>
+              <span class="mi-size">{{(f.size/1024).toFixed(0)}} KB</span>
+              <button class="mi-del" @click="removePendingFile(idx)">{{ t('common.delete') }}</button>
+            </div>
+          </div>
+          <label class="material-upload-btn">
+            {{ t('setup.upload_file') }}
+            <input type="file" accept=".pdf,.docx,.txt,.md" multiple @change="onFileSelect" style="display:none" />
+          </label>
+          <span class="material-hint">{{ t('setup.supported_formats') }}</span>
+        </div>
+      </div>
+
+      <div class="setup-actions">
+        <button class="btn btn-ghost" @click="goHome">{{ t('common.cancel') }}</button>
+        <!-- 有续跑快照时：按钮文字变为"返回对话"，点击进入新逻辑 -->
+        <button v-if="resumeSnapshot" class="btn btn-primary" @click="resumeOrNewMeeting">
+          {{ t('setup.return_chat') }}
+        </button>
+        <button v-else class="btn btn-primary" :disabled="!canStart" @click="startDiscussion">
+          {{ t('setup.start_meeting') }}
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════
+       会谈页
+  ════════════════════════════════════ -->
+  <div v-if="currentPage==='chat'" class="chat-layout">
+
+    <!-- 顶栏：参与者 + 议程进度 -->
+    <div class="chat-topbar">
+      <!-- 参与者 -->
+      <div class="pbar">
+        <span class="pbar-label">{{ t('chat.participants') }}</span>
+        <div v-if="sessionLeader"
+          class="pchip"
+          :style="{color:'#f5a623', borderColor:'rgba(245,166,35,0.3)', background:'rgba(245,166,35,0.1)'}">
+          {{sessionLeader.name}}<span class="pchip-role">{{ t('setup.host_abbr') }}</span>
+        </div>
+        <div v-for="agent in sessionMembers" :key="agent.id"
+          class="pchip"
+          :style="{color: agent.color, borderColor: agent.color+'40', background: agent.color+'12'}">
+          {{agent.name}}
+        </div>
+      </div>
+
+      <!-- 议程进度条（有议程才显示） -->
+      <div v-if="meetingAgenda" class="agenda-bar">
+        <div v-for="(sec, idx) in meetingAgenda.sections" :key="sec.id"
+          class="agenda-step"
+          :class="{
+            'agenda-done': idx < meetingCurrentSection,
+            'agenda-active': idx === meetingCurrentSection,
+            'agenda-pending': idx > meetingCurrentSection
+          }">
+          <div class="agenda-dot"></div>
+          <span class="agenda-title">{{sec.title}}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 嘉宾准备状态（preparing 阶段显示） -->
+    <div v-if="meetingState==='guests_preparing'" class="guest-preparing-banner">
+      <div class="gp-title">{{ t('chat.guests_preparing') }}</div>
+      <div class="gp-list">
+        <div v-for="g in guestStatuses" :key="g.id" class="gp-item">
+          <div class="gp-dot" :style="{background: g.color}"></div>
+          <span>{{g.name}}</span>
+          <span class="gp-status" :class="'gp-'+g.status">{{g.status==='ready' ? '✓ '+t('chat.ready') : t('chat.preparing')+'...'}}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 消息区 -->
+    <div class="chat-msgs" ref="chatArea">
+      <!-- 历史记录为空时的提示 -->
+      <div v-if="isViewingHistory && messages.length === 0"
+        style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+        height:100%;gap:12px;color:var(--text-dim)">
+        <div style="font-size:36px;opacity:.3">📭</div>
+        <div style="font-size:14px">{{ t('chat.no_messages') }}</div>
+        <div style="font-size:12px;opacity:.7">{{ t('chat.not_saved') }}</div>
+      </div>
+      <template v-for="msg in messages" :key="msg.id">
+
+        <!-- 用户消息 -->
+        <div v-if="msg.type==='user'" class="msg user-msg">
+          <div class="msg-av" style="color:#34d399;border-color:#34d39940;background:#34d39912">🙋</div>
+          <div class="msg-body">
+            <div class="msg-name">{{ t('chat.you') }}</div>
+            <div class="msg-bubble">
+              <template v-if="msg.topicTitle || msg.topicContent">
+                <div v-if="msg.topicTitle" style="font-weight:600;margin-bottom:4px">{{msg.topicTitle}}</div>
+                <div v-if="msg.topicContent" style="opacity:0.85;white-space:pre-wrap">{{msg.topicContent}}</div>
+              </template>
+              <template v-else-if="msg.content && msg.content.includes('\n')">
+                <div style="font-weight:600;margin-bottom:4px">{{msg.content.split('\n')[0]}}</div>
+                <div style="opacity:0.85;white-space:pre-wrap">{{msg.content.split('\n').slice(1).join('\n')}}</div>
+              </template>
+              <template v-else>{{msg.content}}</template>
+            </div>
+          </div>
+        </div>
+
+        <!-- 状态提示卡 -->
+        <div v-if="msg.type==='state_tip'" class="state-tip-card">
+          <span class="state-tip-dot" :style="{background: msg.color||'#3b82f6'}"></span>
+          {{msg.content}}
+        </div>
+
+        <!-- 议程卡片（主持人发出，保留历史） -->
+        <div v-if="msg.type==='agenda'" class="msg">
+          <div class="msg-av" :style="{background: msg.color||'#3b82f6', color:'#fff', border:'none', fontSize:'13px', fontWeight:'600', letterSpacing:'1px'}">{{(msg.hostName||t('setup.host_abbr')).slice(0,2)}}</div>
+          <div class="msg-body" style="max-width:520px">
+            <div class="msg-name">
+              <span :style="{color: msg.color||'#3b82f6'}">{{msg.hostName|| t('chat.host_full') }}</span>
+              <span class="role-badge host-badge">{{ t('setup.host_abbr') }}</span>
+              <span v-if="msg.version > 1" style="opacity:0.45;font-size:11px">· {{ t('chat.version') }}{{msg.version}}</span>
+            </div>
+            <div class="msg-bubble host-bubble agenda-bubble">
+              <div class="ab-title">📋 {{ t('chat.agenda_plan') }}</div>
+              <div class="ab-sections">
+                <div v-for="(sec, idx) in msg.sections" :key="idx" class="ab-sec">
+                  <span class="ab-order">{{idx+1}}</span>
+                  <div>
+                    <div class="ab-name">{{sec.title}}</div>
+                    <div class="ab-desc">{{sec.description}} · {{sec.duration_minutes}} {{ t('chat.minutes') }}</div>
+                  </div>
+                </div>
+              </div>
+              <div v-if="msg.isLatest" class="ab-footer">
+                <button class="ab-confirm-btn" @click="confirmAgenda">{{ t('chat.start_prepare') }}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 板块开始卡 -->
+        <div v-if="msg.type==='section_start'" class="section-divider">
+          <span class="sd-line"></span>
+          <span class="sd-label">{{msg.content}}</span>
+          <span class="sd-line"></span>
+        </div>
+
+        <!-- 系统通知（观众互动环节进入提示等） -->
+        <div v-if="msg.type==='system_notice'" style="text-align:center;padding:16px 0">
+          <span style="display:inline-block;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:20px;padding:8px 20px;font-size:13px;color:#3b82f6">
+            🎤 {{msg.content}}
+          </span>
+        </div>
+
+        <!-- 发言（主持人/嘉宾统一） -->
+        <div v-if="msg.type==='agent'" class="msg" :class="{'host-msg': msg.isHost}">
+          <div class="msg-av" :style="{background: msg.color, color:'#fff', border:'none', fontSize:'13px', fontWeight:'600', letterSpacing:'1px'}">{{msg.name.slice(0,2)}}</div>
+          <div class="msg-body">
+            <div class="msg-name">
+              <span :style="{color: msg.color}">{{msg.name}}</span>
+              <span v-if="msg.isHost" class="role-badge host-badge">{{ t('setup.host_abbr') }}</span>
+              <span v-if="msg.section" style="opacity:0.5;font-size:11px">· {{msg.section}}</span>
+            </div>
+            <div class="msg-bubble" :class="{'host-bubble': msg.isHost}">{{msg.content}}<span v-if="msg.streaming" class="typing-cursor"></span></div>
+          </div>
+        </div>
+
+        <!-- 历史消息（role 格式） -->
+        <div v-if="msg.role==='user'" class="msg user-msg">
+          <div class="msg-av" style="color:#34d399;border-color:#34d39940;background:#34d39912">🙋</div>
+          <div class="msg-body">
+            <div class="msg-name">{{ t('chat.you') }}</div>
+            <div class="msg-bubble">{{msg.content}}</div>
+          </div>
+        </div>
+        <div v-if="msg.role==='assistant'" class="msg">
+          <div class="msg-av" :style="{background: msg.agent?.color||'#4f8ef7', color:'#fff', border:'none', fontSize:'13px', fontWeight:'600', letterSpacing:'1px'}">{{(msg.agent?.name|| t('chat.agent')).slice(0,2)}}</div>
+          <div class="msg-body">
+            <div class="msg-name"><span :style="{color: msg.agent?.color||'#4f8ef7'}">{{msg.agent?.name || t('chat.agent') }}</span></div>
+            <div class="msg-bubble">{{msg.content}}</div>
+          </div>
+        </div>
+
+        <!-- 会议报告 -->
+        <div v-if="msg.type==='report'" class="report-card">
+          <div class="rc-header">📄 {{ t('chat.report') }}</div>
+          <div class="rc-body">{{msg.content}}<span v-if="msg.streaming" class="typing-cursor"></span></div>
+        </div>
+
+      </template>
+    </div>
+
+    <!-- 状态栏 + 控制面板 -->
+    <div class="sbar">
+      <div class="sdot" :class="{on: isDiscussing}"></div>
+      <span style="flex:1">{{statusText}}</span>
+      <!-- 返回配置按钮（仅对话进行中显示；历史记录用底部操作栏） -->
+      <button v-if="!isViewingHistory" class="ctrl-btn" @click="confirmLeave()"
+        :disabled="!isViewingHistory && isDiscussing && !isPaused"
+        :title="(!isViewingHistory && isDiscussing && !isPaused) ? t('nav.pause_first') : t('chat.return_setup')"
+        :style="(!isViewingHistory && isDiscussing && !isPaused) ? 'opacity:0.4;cursor:not-allowed;font-size:11px;width:auto;padding:0 8px' : 'font-size:11px;width:auto;padding:0 8px'">{{ t('chat.return_setup') }}</button>
+      <!-- 叫停按钮（讨论中才显示） -->
+      <template v-if="isDiscussing && meetingId">
+        <button class="ctrl-btn" @click="sendControl('pause')" v-if="!isPaused" :title="t('chat.pause')">⏸</button>
+        <button class="ctrl-btn ctrl-resume" @click="sendControl('resume')" v-if="isPaused" :title="t('chat.resume_btn')">▶</button>
+        <button class="ctrl-btn" @click="sendControl('skip_section')" :title="t('chat.skip_section')">⏭</button>
+        <div class="ctrl-call-wrap">
+          <select class="ctrl-select" v-model="callTarget">
+            <option value="">{{ t('chat.call_someone') }}...</option>
+            <option v-for="agent in sessionMembers" :key="agent.id" :value="agent.id">
+              {{ agent.name }}
+            </option>
+          </select>
+          <button class="ctrl-call-btn" @click="callOnGuest" :disabled="!callTarget">{{ t('chat.speak') }}</button>
+        </div>
+      </template>
+      <!-- 叫停按钮（任意阶段可用） -->
+      <button v-if="meetingId && !isDiscussing && meetingState !== 'ended' && meetingState !== 'agenda_confirming' && meetingState !== 'preparing' && meetingState !== 'guests_preparing'"
+        class="ctrl-btn" style="background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.3);color:#ef4444;width:auto;padding:0 8px;font-size:11px"
+        @click="stopDiscussion">■ {{ t('chat.stop') }}</button>
+    </div>
+
+    <!-- 输入区 -->
+    <div class="chat-input" v-if="!isViewingHistory">
+      <!-- 议程确认模式 -->
+      <template v-if="meetingState==='agenda_confirming'">
+        <textarea class="ci-ta" style="flex:1" v-model="agendaFeedback" rows="1"
+          :placeholder="t('chat.agenda_feedback_ph')"
+          @keydown.enter.exact.prevent="regenerateAgenda"
+          @input="autoResize" ref="inputRef"></textarea>
+        <button class="agenda-send-btn" @click="regenerateAgenda" :disabled="!agendaFeedback.trim()">{{ t('common.send') }}</button>
+      </template>
+      <!-- 观众互动模式 -->
+      <template v-else-if="meetingState==='audience_qa'">
+        <textarea class="ci-ta" style="flex:1" v-model="chatInput" rows="1"
+          :placeholder="t('chat.audience_qa_ph')"
+          @keydown.enter.exact.prevent="sendAudienceQuestion"
+          @input="autoResize" ref="inputRef"></textarea>
+        <button class="send-btn" @click="sendAudienceQuestion" :disabled="isDiscussing || !chatInput.trim()">{{ t('chat.ask') }}</button>
+        <button class="btn btn-primary" style="height:36px;padding:0 14px;font-size:13px;flex-shrink:0"
+          @click="generateSummary">{{ t('chat.gen_summary') }}</button>
+      </template>
+      <!-- 会谈结束后 -->
+      <template v-else-if="meetingState==='ended'">
+        <div style="display:flex;gap:12px;width:100%;justify-content:center;align-items:center">
+          <span style="font-size:13px;color:var(--text-dim)">{{ t('chat.ended') }}</span>
+          <button class="btn btn-primary" style="height:36px;padding:0 16px;font-size:13px"
+            @click="saveSummaryTxt" v-if="summaryContent">⬇ {{ t('chat.download_summary') }} (txt)</button>
+          <button class="btn btn-ghost" style="height:36px;padding:0 16px;font-size:13px"
+            @click="confirmLeave">{{ t('chat.return_setup') }}</button>
+        </div>
+      </template>
+      <!-- 普通追问模式 -->
+      <template v-else>
+        <textarea class="ci-ta" style="flex:1" v-model="chatInput" rows="1"
+          :placeholder="t('chat.followup_ph')"
+          @keydown.enter.exact.prevent="sendFollowUp"
+          @input="autoResize" ref="inputRef"></textarea>
+        <button class="send-btn" @click="sendFollowUp" :disabled="isDiscussing || !chatInput.trim()">➤</button>
+      </template>
+    </div>
+
+    <!-- 历史会谈操作栏 -->
+    <div class="chat-input" v-if="isViewingHistory"
+      style="justify-content:center;align-items:center;gap:10px;padding:10px 20px">
+      <!-- 未结束的会谈：可继续对话 -->
+      <button v-if="historicConfig && historicConfig.state !== 'ended'"
+        @click="resumeDiscussion"
+        style="height:40px;padding:0 24px;border-radius:20px;border:none;background:var(--blue);color:#fff;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;transition:opacity .15s">
+        ▶ {{ t('chat.continue_chat') }}
+      </button>
+      <!-- 已结束的会谈：返回配置 + 下载总结 -->
+      <template v-if="!historicConfig || historicConfig.state === 'ended'">
+        <button
+          @click="goSetupFromHistory()"
+          style="height:40px;padding:0 20px;border-radius:20px;border:1.5px solid var(--border);background:#fff;color:var(--text-sub);font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s"
+          onmouseover="this.style.borderColor='var(--blue)';this.style.color='var(--blue)'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-sub)'">
+          ⚙️ {{ t('chat.reconfig') }}
+        </button>
+        <button
+          @click="downloadSummary()"
+          style="height:40px;padding:0 20px;border-radius:20px;border:1.5px solid var(--border);background:#fff;color:var(--text-sub);font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s"
+          onmouseover="this.style.borderColor='#10b981';this.style.color='#10b981'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-sub)'">
+          📥 {{ t('chat.download_summary') }}
+        </button>
+      </template>
+
+    </div>
+
+    <!-- 退出确认弹窗 -->
+    <div v-if="showLeaveConfirm" class="overlay" @click.self="showLeaveConfirm=false"
+      style="background:rgba(15,23,42,0.45);backdrop-filter:blur(6px)">
+      <div style="
+        background:#fff;border-radius:20px;padding:32px 28px 24px;
+        width:340px;box-shadow:0 20px 60px rgba(0,0,0,0.18);
+        display:flex;flex-direction:column;align-items:center;gap:0">
+        <!-- 标题 -->
+        <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:8px">
+          {{ t('dialog.leave_title') }}
+        </div>
+        <!-- 副标题 -->
+        <div style="font-size:13px;color:var(--text-dim);text-align:center;line-height:1.7;margin-bottom:24px">
+          {{ t('dialog.leave_desc') }}
+        </div>
+        <!-- 主按钮 -->
+        <button @click="leaveWithSave"
+          style="width:100%;height:44px;border-radius:12px;border:none;
+          background:var(--blue);color:#fff;font-size:15px;font-weight:600;
+          cursor:pointer;margin-bottom:10px;transition:opacity .15s"
+          onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+          {{ t('dialog.save_leave') }}
+        </button>
+        <!-- 次按钮 -->
+        <button @click="leaveWithoutSave"
+          style="width:100%;height:40px;border-radius:12px;border:none;
+          background:transparent;color:var(--text-sub);font-size:13px;
+          cursor:pointer;transition:opacity .15s"
+          onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--text-sub)'">
+          {{ t('dialog.leave_no_save') }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新会谈确认弹窗（配置已修改，是否开启全新会谈） -->
+  <div v-if="showNewMeetingConfirm" class="overlay" @click.self="showNewMeetingConfirm=false"
+    style="background:rgba(15,23,42,0.45);backdrop-filter:blur(6px)">
+    <div style="
+      background:#fff;border-radius:20px;padding:32px 28px 24px;
+      width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.18);
+      display:flex;flex-direction:column;align-items:center;gap:0">
+      <div style="font-size:32px;margin-bottom:12px">⚠️</div>
+      <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:8px">
+        {{ t('dialog.config_changed') }}
+      </div>
+      <div style="font-size:13px;color:var(--text-dim);text-align:center;line-height:1.7;margin-bottom:24px">
+        {{ t('dialog.new_meeting_desc') }}
+      </div>
+      <button @click="confirmNewMeeting"
+        style="width:100%;height:44px;border-radius:12px;border:none;
+        background:var(--blue);color:#fff;font-size:15px;font-weight:600;
+        cursor:pointer;margin-bottom:10px;transition:opacity .15s"
+        onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+        {{ t('dialog.new_meeting') }}
+      </button>
+      <button @click="cancelNewMeeting"
+        style="width:100%;height:40px;border-radius:12px;border:none;
+        background:transparent;color:var(--text-sub);font-size:13px;
+        cursor:pointer;transition:opacity .15s"
+        onmouseover="this.style.color='var(--blue)'" onmouseout="this.style.color='var(--text-sub)'">
+        {{ t('dialog.cancel_restore') }}
+      </button>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════
+       智能体 Modal
+  ════════════════════════════════════ -->
+  <div v-if="showModal" class="overlay" @click.self="showModal=false">
+    <div class="modal">
+      <div class="modal-hd">{{editingAgent ? t('agent.edit_agent') : t('agent.add_agent')}}
+        <span v-if="!editingAgent" style="font-size:11px;font-weight:400;color:var(--text-dim);margin-left:6px">
+          （{{form.is_leader ? t('setup.host_abbr') : t('setup.member')}}）
+        </span>
+      </div>
+
+      <div class="frow" style="align-items:flex-end">
+        <div class="fg" style="flex:1">
+          <label class="fl">{{ t('agent.name') }}</label>
+          <input class="fi" v-model="form.name" :placeholder="t('agent.name_ph')" />
+        </div>
+      </div>
+
+      <div class="fg">
+        <label class="fl">{{ t('agent.role_prompt') }}</label>
+        <textarea class="fta" v-model="form.role_prompt"
+          :placeholder="t('agent.role_ph')"></textarea>
+      </div>
+
+      <div class="fg">
+        <label class="fl">{{ t('agent.select_model') }}</label>
+        <div v-if="userModels.length===0" class="empty-inline">
+          请先在右上角「{{ t('nav.smart') }}」→「{{ t('model.manage') }}」添加模型
+        </div>
+        <div v-else>
+          <div v-for="(m, idx) in userModels" :key="idx"
+            class="model-sel-item" :class="{selected: form.modelIdx===idx}"
+            @click="form.modelIdx=idx">
+            <img v-if="brandLogoUrl(m)" :src="brandLogoUrl(m)" style="width:18px;height:18px;border-radius:3px;object-fit:contain;flex-shrink:0" />
+            <span v-else style="font-size:15px">{{platformIcon(m.platform)}}</span>
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:600">{{m.label}}</div>
+              <div style="font-size:11px;color:var(--text-dim)">{{m.model}}</div>
+            </div>
+            <span v-if="form.modelIdx===idx" style="color:var(--blue);font-size:13px">✓</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="fg">
+        <label class="fl">{{ t('agent.color_label') }}</label>
+        <div class="color-row">
+          <div v-for="c in colors" :key="c" class="cdot"
+            :style="{background:c}"
+            :class="{sel: form.color===c}"
+            @click="form.color=c"></div>
+        </div>
+      </div>
+
+      <div class="modal-ft">
+        <button v-if="editingAgent" class="btn btn-danger" @click="deleteAgent">{{ t('common.delete') }}</button>
+        <button class="btn btn-ghost" @click="showModal=false">{{ t('common.cancel') }}</button>
+        <button class="btn btn-primary" @click="saveAgent">{{ t('common.save') }}</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- [已迁移到智能增强弹窗] 旧模型配置 Modal 保留备用，v-if 永远 false 不渲染 -->
+
+</div>
+<!-- ═══ i18n 国际化系统 ═══ -->
+<script>
+const I18N_DICTS = {
+  zh: {"nav":{"home":"返回首页","pause_first":"请先暂停对话","smart":"智能增强"},"common":{"save":"保存","clear":"清除","edit":"编辑","delete":"删除","add":"添加","save_modify":"保存修改","testing":"测试中…","cancel":"取消","remove":"移除","send":"发送"},"smart":{"title":"智能增强","tavily_desc":"会议开始前系统会自动搜索与话题相关的最新资讯，注入给所有嘉宾，让讨论基于最新信息。","tavily_free":"免费额度够用","search_tab":"联网搜索","model_tab":"模型管理","memory_tab":"向量记忆"},"model":{"no_models":"还没有配置模型，请添加第一个 ↓","default_addr":"默认地址","add_new":"+ 添加新模型","edit_model":"编辑模型","config_new":"配置新模型","display_name":"显示名称","name_placeholder":"如：DeepSeek-V3","platform":"平台协议","local":"本地","qianfan":"文心（千帆）","hunyuan":"腾讯混元","custom":"自定义","compatible":"兼容","model_name":"模型名称","ollama_hint":"需与本地已拉取的模型名称一致（ollama list 可查看）","api_key":"API Key","optional":"可不填","local_no_key":"本地模式无需填写","base_url":"Base URL（只填到 /v1）","url_hint":"DeepSeek → api.deepseek.com/v1 · 通义 → dashscope.aliyuncs.com/compatible-mode/v1 · 硅基 → api.siliconflow.cn/v1 · Ollama → localhost:11434/v1","test_conn":"测试连接","manage":"模型管理"},"memory":{"local_storage":"本地向量存储","ready":"就绪","local_desc":"向量数据自动存储在本地（ChromaDB），重启不丢，零配置，数据不出本机。","emb_config":"Embedding 模型配置","configured":"已配置","emb_desc":"将对话文本转换为语义向量。推荐阿里百炼（免费100万Token/月）或 OpenAI 兼容接口。","emb_platform":"Embedding 平台","select_platform":"请选择平台","auto_or_manual":"自动填充或手动填写"},"home":{"hero_title":"集合多个 <em>AI 专家</em><br>围绕您的话题深度讨论","hero_desc":"选择主持人和成员，输入话题，让 AI 智能体展开结构化讨论并综合结论","new_meeting":"开始新会谈","history":"历史会谈","unnamed":"未命名会谈","completed":"已完成","incomplete":"未完成","messages":"条发言","no_history":"暂无历史记录，点击「开始新会谈」创建第一次会谈"},"setup":{"title":"配置本次会谈","subtitle":"选择参与的智能体，填写讨论话题","host":"主持人","host_abbr":"主持","members":"成员（可多个）","add_member":"+ 添加成员","member":"成员","host_style":"主持风格","topic":"讨论话题","topic_title_ph":"请输入话题标题（如：AI发展趋势）","topic_content_ph":"请详细描述您想让智能体讨论的内容或问题...（选填）","materials":"背景材料（可选）","historic_material":"历史材料","upload_file":"+ 上传文件","supported_formats":"支持 PDF、Word、txt、md","return_chat":"← 返回对话","start_meeting":"开始会谈 →","no_host":"还未设置主持人","no_members":"还未添加成员"},"chat":{"participants":"参与者","guests_preparing":"嘉宾准备中...","ready":"✓ 就绪","preparing":"准备中...","no_messages":"暂无对话记录","not_saved":"这场会谈可能未正常保存","you":"您","host_full":"主持人","version":"第{v}版","agenda_plan":"议程方案","start_prepare":"开始准备","minutes":" 分钟","return_setup":"← 返回配置","pause":"暂停","resume_btn":"继续","skip_section":"跳过当前板块","call_someone":"点名","speak":"发言","stop":"叫停","agenda_feedback_ph":"和主持人说说你的想法，或问任何问题...","audience_qa_ph":"向嘉宾提问，主持人会引导回答...","ask":"提问","gen_summary":"生成总结报告","ended":"会谈已结束","download_summary":"下载总结报告","continue_chat":"继续对话","reconfig":"重新配置并讨论","agent":"智能体","speaking":"正在发言...","followup_ph":"补充追问...","meeting_done":"会谈已完成 ✓","meeting_start":"会议开始","audience_qa":"观众互动环节","error":"错误","unknown_error":"未知错误","creating":"创建会议中...","uploading_materials":"上传背景材料...","generating_agenda":"主持人正在生成议程...","connection_lost":"连接中断，请刷新页面重试","paused":"已暂停","stopped":"已叫停","resuming":"会谈恢复中...","resume_failed":"续跑失败，请刷新页面","resume_failed2":"续跑失败，请重新配置","host_thinking":"主持人思考中...","preparing_host":"主持人准备议程中...","agenda_confirming":"请确认议程","ready_start":"就绪，即将开始会议","warmup":"暖场中","discussing":"讨论进行中","free_talk":"自由讨论","summarizing":"总结中","report":"会议报告"},"dialog":{"leave_title":"离开当前会谈？","leave_desc":"保存后可在历史记录中重新查看<br>或继续这场对话","save_leave":"保存并离开","leave_no_save":"不保存，直接离开","config_changed":"配置已修改","new_meeting":"开始全新会谈","cancel_restore":"取消，恢复原配置","new_meeting_desc":"您修改了主持人、嘉宾或讨论话题。<br>点击「开始全新会谈」将创建一场全新的会谈，<br>原来暂停的会谈可在历史记录中继续。"},"agent":{"edit_agent":"编辑智能体","add_agent":"添加智能体","name":"名称","name_ph":"如：技术专家","role_prompt":"角色设定 Prompt","role_ph":"描述这个智能体的角色、专业背景和思考方式...","select_model":"选择模型","color_label":"颜色标识"},"alert":{"platform_key":"请选择平台并填写 API Key","name_prompt":"请填写名称和角色设定 Prompt","model_required":"显示名称、模型名称、API Key 均为必填项"},"style":{"neutral_name":"中立客观","neutral_desc":"平衡各方，不偏不倚，平稳推进讨论","aggressive_name":"激进挑事","aggressive_desc":"制造争议，引爆辩论火花","gentle_name":"温和引导","gentle_desc":"舒缓节奏，避免冲突升级","analytical_name":"分析逻辑","analytical_desc":"追求数据支撑，深挖论证逻辑"}},
+  en: {"nav":{"home":"Home","pause_first":"Pause chat first","smart":"Smart Features"},"common":{"save":"Save","clear":"Clear","edit":"Edit","delete":"Delete","add":"Add","save_modify":"Save Changes","testing":"Testing…","cancel":"Cancel","remove":"Remove","send":"Send"},"smart":{"title":"Smart Features","tavily_desc":"Before the meeting starts, the system automatically searches for the latest information on the topic and injects it to all agents.","tavily_free":"Free tier sufficient","search_tab":"Web Search","model_tab":"Models","memory_tab":"Vector Memory"},"model":{"no_models":"No models configured yet. Add your first ↓","default_addr":"Default","add_new":"+ Add Model","edit_model":"Edit Model","config_new":"Configure New Model","display_name":"Display Name","name_placeholder":"e.g. DeepSeek-V3","platform":"Platform","local":"Local","qianfan":"Ernie (Qianfan)","hunyuan":"Tencent Hunyuan","custom":"Custom","compatible":"Compatible","model_name":"Model Name","ollama_hint":"Must match locally pulled model name (check with ollama list)","api_key":"API Key","optional":"Optional","local_no_key":"Not needed for local mode","base_url":"Base URL (up to /v1 only)","url_hint":"DeepSeek → api.deepseek.com/v1 · Qwen → dashscope.aliyuncs.com/compatible-mode/v1 · SiliconFlow → api.siliconflow.cn/v1 · Ollama → localhost:11434/v1","test_conn":"Test Connection","manage":"Models"},"memory":{"local_storage":"Local Vector Storage","ready":"Ready","local_desc":"Vector data is stored locally (ChromaDB). Persists across restarts. Zero config. Data never leaves this machine.","emb_config":"Embedding Model Config","configured":"Configured","emb_desc":"Converts conversation text into semantic vectors. Recommended: Alibaba DashScope (free 1M tokens/month) or OpenAI compatible.","emb_platform":"Embedding Platform","select_platform":"Select Platform","auto_or_manual":"Auto-fill or manual"},"home":{"hero_title":"Gather Multiple <em>AI Experts</em><br>for an In-Depth Discussion on Your Topic","hero_desc":"Choose a host and members, enter a topic, and let AI agents engage in a structured discussion and synthesize conclusions.","new_meeting":"New Meeting","history":"History","unnamed":"Untitled Discussion","completed":"Completed","incomplete":"In Progress","messages":"messages","no_history":"No history yet. Click \"New Meeting\" to start your first discussion."},"setup":{"title":"Configure This Meeting","subtitle":"Select participating agents and enter the discussion topic","host":"Host","host_abbr":"Host","members":"Members (Multiple OK)","add_member":"+ Add Member","member":"Member","host_style":"Host Style","topic":"Discussion Topic","topic_title_ph":"e.g., AI Development Trends","topic_content_ph":"Describe in detail what you'd like the AI agents to discuss... (optional)","materials":"Background Materials (Optional)","historic_material":"Historic Materials","upload_file":"+ Upload File","supported_formats":"Supports PDF, Word, txt, md","return_chat":"← Back to Chat","start_meeting":"Start Meeting →","no_host":"No host set yet","no_members":"No members added yet"},"chat":{"participants":"Participants","guests_preparing":"Preparing guests...","ready":"✓ Ready","preparing":"Preparing...","no_messages":"No messages yet","not_saved":"This meeting may not have been saved properly","you":"You","host_full":"Host","version":"v{v}","agenda_plan":"Agenda Plan","start_prepare":"Start Prep","minutes":" min","return_setup":"← Back to Setup","pause":"Pause","resume_btn":"Resume","skip_section":"Skip Section","call_someone":"Call","speak":"Speak","stop":"Stop","agenda_feedback_ph":"Share your thoughts or ask the host anything...","audience_qa_ph":"Ask a question — the host will guide the response...","ask":"Ask","gen_summary":"Generate Summary","ended":"Meeting Ended","download_summary":"Download Summary","continue_chat":"Continue Chat","reconfig":"Reconfigure & Discuss","agent":"Agent","speaking":" speaking...","followup_ph":"Follow up...","meeting_done":"Meeting Complete ✓","meeting_start":"Meeting Started","audience_qa":"Q&A Session","error":"Error","unknown_error":"Unknown error","creating":"Creating meeting...","uploading_materials":"Uploading materials...","generating_agenda":"Host is generating agenda...","connection_lost":"Connection lost. Please refresh.","paused":"Paused","stopped":"Stopped","resuming":"Resuming...","resume_failed":"Resume failed. Please refresh.","resume_failed2":"Resume failed. Please reconfigure.","host_thinking":"Host thinking...","preparing_host":"Host preparing agenda...","agenda_confirming":"Please Confirm Agenda","ready_start":"Ready, starting soon","warmup":"Warming up","discussing":"Discussion In Progress","free_talk":"Free Talk","summarizing":"Summarizing","report":"Meeting Report"},"dialog":{"leave_title":"Leave Current Meeting?","leave_desc":"Your progress will be saved and can be resumed from history.<br>Or continue this session.","save_leave":"Save & Leave","leave_no_save":"Leave Without Saving","config_changed":"Configuration Changed","new_meeting":"Start Fresh Meeting","cancel_restore":"Cancel & Restore","new_meeting_desc":"You modified the host, members, or topic.<br>Clicking \"Start Fresh Meeting\" creates a new session.<br>Your paused meeting can be resumed from history."},"agent":{"edit_agent":"Edit Agent","add_agent":"Add Agent","name":"Name","name_ph":"e.g., Tech Expert","role_prompt":"Role Prompt","role_ph":"Describe this agent's role, expertise, and thinking style...","select_model":"Select Model","color_label":"Color Label"},"alert":{"platform_key":"Please select platform and fill API Key","name_prompt":"Please fill in Name and Role Prompt","model_required":"Display Name, Model Name, and API Key are required"},"style":{"neutral_name":"Neutral","neutral_desc":"Balanced, impartial, smooth discussion flow","aggressive_name":"Provocative","aggressive_desc":"Stir controversy, spark debate","gentle_name":"Gentle Guide","gentle_desc":"Soothe the pace, avoid escalation","analytical_name":"Analytical","analytical_desc":"Data-driven, deep logic analysis"}}
+};
+const I18N = {
+  lang: localStorage.getItem('multi-chat-lang') || 'zh',
+  switchLang(newLang) {
+    if (!I18N_DICTS[newLang]) return;
+    this.lang = newLang;
+    localStorage.setItem('multi-chat-lang', newLang);
+  },
+  t(key) {
+    const d = I18N_DICTS[this.lang];
+    if (!d) return key;
+    const keys = key.split('.');
+    let val = d;
+    for (const k of keys) { if (val && val[k] !== undefined) val = val[k]; else return key; }
+    return typeof val === 'string' ? val : key;
+  },
+};
+</script>
+
+<script>
+const { createApp, ref, computed, reactive, onMounted, nextTick } = Vue;
+
+
+
+const API_V1 = 'http://localhost:8000/api';          // 旧后端（历史记录用）
+const API = 'http://localhost:8001';                  // 新后端
+const WS_BASE = 'ws://localhost:8001';
+const MODELS_KEY = 'mac_user_models';
+
+createApp({
+  setup() {
+    const t = I18N.t;
+    const currentLang = ref(I18N.lang);
+    const currentPage = ref('home');
+    const isViewingHistory = ref(false);
+
+    const agents = ref([]);
+    const sessions = ref([]);
+    const messages = ref([]);
+    const topicTitle = ref('');      // 讨论话题标题（必填，短标题）
+    const topicContent = ref('');    // 话题详细内容（选填）
+    const chatInput = ref('');   // 对话页输入框（观众提问/追问），独立于配置页的话题
+    const selectedLeaderId = ref('');
+    const selectedMemberIds = ref([]);
+    // 本次会谈临时角色（不依赖全局agents池）
+    const sessionLeader = ref(null);   // {id, name, color, role_prompt, model, platform, ...}
+    const sessionMembers = ref([]);    // [{...}, ...]
+    const isDiscussing = ref(false);
+    const statusText = ref('就绪');
+
+    // 新后端会议状态
+    const meetingId = ref('');
+    const pendingFiles = ref([]);  // 待上传的文件列表（File对象）
+    const historicMaterials = ref([]);  // 从历史记录复用的材料 [{name, content}]
+    const meetingState = ref('');
+    const meetingAgenda = ref(null);
+    const meetingCurrentSection = ref(0);
+    const guestStatuses = ref([]);
+    const agendaFeedback = ref('');
+    const isPaused = ref(false);
+    const callTarget = ref('');
+    const showLeaveConfirm = ref(false);
+    const _leaveTarget = ref('setup'); // 'home' or 'setup'
+    const summaryContent = ref('');
+    const historicConfig = ref(null);  // 历史会谈配置缓存
+    // 续跑暂停后返回配置页时，记录原始配置快照，用于检测配置是否被修改
+    const showNewMeetingConfirm = ref(false);  // 新会谈确认弹窗
+    const resumeSnapshot = ref(null);  // { leaderId, memberIds, topic, meetingId }
+    let controlWs = null;
+    let currentSpeakerBuffers = {};
+    let _wsReconnectTimer = null;  // WebSocket 重连定时器
+
+    const showModal = ref(false);
+    const showModelModal = ref(false);  // 保留兼容
+    const showTavilyModal = ref(false); // 保留兼容
+
+    // ─── 智能增强统一弹窗 ───
+    const showSmartModal = ref(false);
+    const smartTab = ref('search');
+    const smartTabs = [
+      { key: 'search',  label: I18N.t('smart.search_tab') },
+      { key: 'model',   label: I18N.t('smart.model_tab') },
+      { key: 'memory',  label: I18N.t('smart.memory_tab') },
+    ];
+    // 已配置项计数（用于顶栏按钮状态）
+    const smartConfiguredCount = computed(() => {
+      let n = 0;
+      if (tavilyKey.value) n++;
+      if (userModels.value.length > 0) n++;
+      // 本地向量存储始终就绪
+      n++;
+      try { if (JSON.parse(localStorage.getItem('mac_embedding_config')||'{}').apiKey) n++; } catch(e){}
+      return n;
+    });
+
+    // Embedding 模型配置  
+    const EMB_KEY = 'mac_embedding_config';
+    const embConfig = ref(JSON.parse(localStorage.getItem(EMB_KEY)||'{}'));
+    const embForm = ref({ platform:'', apiKey:'', baseUrl:'', model:'' });
+    const embTestResult = ref(null);
+    const embTestLoading = ref(false);
+    
+    // 初始化时回填 embForm
+    if (embConfig.value && embConfig.value.apiKey) {
+      embForm.value = { ...embForm.value, ...embConfig.value };
+    }
+
+    // Embedding 平台预设
+    const embDefaults = {
+      dashscope: { url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'text-embedding-v4' },
+      openai:     { url: 'https://api.openai.com/v1',                      model: 'text-embedding-3-small' },
+      hunyuan:    { url: 'https://api.hunyuan.cloud.tencent.com/v1',     model: 'hunyuan-embedding' },
+      custom:     { url: '',                                                model: '' },
+    };
+
+    function onEmbPlatformChange() {
+      const def = embDefaults[embForm.value.platform];
+      if (def) {
+        embForm.value.baseUrl = def.url;
+        if (!embForm.value.model) embForm.value.model = def.model;
+      }
+      embTestResult.value = null;
+    }
+
+    // 主持风格（配置页用，localStorage）
+    const HOST_STYLE_KEY = 'mac_host_style';
+    const hostStyle = ref(localStorage.getItem(HOST_STYLE_KEY) || 'neutral');
+
+    function saveEmbConfig() {
+      const f = embForm.value;
+      if (!f.platform || !f.apiKey) {
+        alert(t('alert.platform_key'));
+        return;
+      }
+      embConfig.value = { platform:f.platform, apiKey:f.apiKey.trim(), baseUrl:f.baseUrl, model:f.model };
+      localStorage.setItem(EMB_KEY, JSON.stringify(embConfig.value));
+      embTestResult.value = null;
+    }
+
+    function clearEmbConfig() {
+      embConfig.value = {};
+      embForm.value = { platform:'', apiKey:'', baseUrl:'', model:'' };
+      localStorage.setItem(EMB_KEY, '{}');
+      embTestResult.value = null;
+    }
+
+    async function testEmbConnection() {
+      const f = embForm.value;
+      if (!f.apiKey || (!f.baseUrl && f.platform!=='dashscope')) {
+        embTestResult.value = { ok:false, msg:'请先填写 API Key 和 Base URL' };
+        return;
+      }
+      embTestLoading.value = true;
+      embTestResult.value = null;
+      try {
+        const res = await fetch(`${API}/services/test-embedding`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            platform: f.platform,
+            apiKey: f.apiKey.trim(),
+            baseUrl: f.baseUrl || undefined,
+            model: f.model || undefined,
+          })
+        });
+        const data = await res.json();
+        embTestResult.value = data.ok ? { ok:true, msg:`连接成功 · ${data.dimension||''}维` } : { ok:false, msg:data.error || `测试失败 (${res.status})` };
+      } catch(e) {
+        embTestResult.value = { ok:false, msg:`网络错误：${e.message}` };
+      } finally {
+        embTestLoading.value = false;
+      }
+    }
+    const tavilyKey = ref(localStorage.getItem('tavilyKey') || '');
+    const tavilyKeyInput = ref(localStorage.getItem('tavilyKey') || '');
+    const editingAgent = ref(null);
+    const editingModelIdx = ref(-1);
+
+    function saveTavilyKey() {
+      tavilyKey.value = tavilyKeyInput.value.trim();
+      localStorage.setItem('tavilyKey', tavilyKey.value);
+      // 不关闭弹窗，用户可能继续配置其他项
+    }
+
+    const chatArea = ref(null);
+    const inputRef = ref(null);
+
+    const userModels = ref(JSON.parse(localStorage.getItem(MODELS_KEY) || '[]'));
+    const platformDefaults = {
+      openai:   { url: 'https://api.openai.com/v1',                           model: 'gpt-4o-mini' },
+      ollama:   { url: 'http://localhost:11434/v1',                            model: 'llama3' },
+      qianfan:  { url: 'https://qianfan.baidubce.com/v2',                     model: 'ernie-4.0-8k' },
+      hunyuan:  { url: 'https://api.hunyuan.cloud.tencent.com/v1',            model: 'hunyuan-turbo' },
+      custom:   { url: '',                                                     model: 'deepseek-chat' },
+    };
+
+    function onPlatformChange() {
+      const def = platformDefaults[modelForm.value.platform];
+      if (def) {
+        modelForm.value.baseUrl = def.url;
+        if (!modelForm.value.model) modelForm.value.model = def.model;
+      }
+      testResult.value = null;
+    }
+    const modelForm = ref({ label:'', platform:'custom', model:'', apiKey:'', baseUrl:'' });
+
+    const emojis = ['🤖','👨‍💼','👩‍💻','🧑‍🔬','👨‍🏫','🧑‍⚕️','👩‍💼','🧙‍♂️','🦊','🐼','🦁','🐯','🧠','⚡','🔥','💎','🌟','🎯'];
+    const colors = ['#4f8ef7','#818cf8','#a78bfa','#f472b6','#f87171','#f5a623','#34d399','#14b8a6','#38bdf8','#a3e635'];
+
+    // 主持风格选项（配置页用）
+    const hostStyles = [
+      { key: 'neutral',    name: I18N.t('style.neutral_name'),  desc: I18N.t('style.neutral_desc'), color: '#3b82f6', bgLight: 'rgba(59,130,246,0.06)',  bgActive: 'rgba(59,130,246,0.15)' },
+      { key: 'aggressive', name: I18N.t('style.aggressive_name'),  desc: I18N.t('style.aggressive_desc'),           color: '#ef4444', bgLight: 'rgba(239,68,68,0.06)',   bgActive: 'rgba(239,68,68,0.15)' },
+      { key: 'gentle',     name: I18N.t('style.gentle_name'),  desc: I18N.t('style.gentle_desc'),             color: '#22c55e', bgLight: 'rgba(34,197,94,0.06)',   bgActive: 'rgba(34,197,94,0.15)' },
+      { key: 'analytical', name: I18N.t('style.analytical_name'),  desc: I18N.t('style.analytical_desc'),         color: '#f59e0b', bgLight: 'rgba(245,158,11,0.06)',  bgActive: 'rgba(245,158,11,0.15)' },
+    ];
+    const form = ref({ name:'', avatar:'', role_prompt:'', platform:'custom', model:'', color:'#4f8ef7', modelIdx:-1 });
+
+    const leaderAgents = computed(() => sessionLeader.value ? [sessionLeader.value] : []);
+    const memberAgents = computed(() => sessionMembers.value);
+    const canStart = computed(() =>
+      !!sessionLeader.value &&
+      sessionMembers.value.length > 0 &&
+      topicTitle.value.trim().length > 0 &&
+      !isDiscussing.value
+    );
+
+    /** 组合标题+内容为完整话题字符串（用于发送给后端） */
+    function getFullTopic() {
+      const title = topicTitle.value.trim();
+      const content = topicContent.value.trim();
+      if (!title) return '';
+      return content ? `${title}\n${content}` : title;
+    }
+
+    /** 从后端 topic + discussion_title 拆分出标题和内容 */
+    function splitTopic(discussionTitle, fullTopic) {
+      if (discussionTitle && discussionTitle.trim()) {
+        const title = discussionTitle.trim();
+        if (fullTopic && fullTopic.startsWith(title + '\n')) {
+          return { title, content: fullTopic.slice(title.length + 1) };
+        }
+        return { title, content: (fullTopic === title) ? '' : (fullTopic || '') };
+      }
+      // 没有独立标题，尝试从 topic 拆分（首行作为标题）
+      if (fullTopic && fullTopic.includes('\n')) {
+        const idx = fullTopic.indexOf('\n');
+        return { title: fullTopic.slice(0, idx), content: fullTopic.slice(idx + 1) };
+      }
+      return { title: fullTopic || '', content: '' };
+    }
+
+    /** 从当前状态冻结快照（统一入口，保证存取字段一致） */
+    function saveSnapshot(meetingIdVal) {
+      resumeSnapshot.value = {
+        meetingId: meetingIdVal || meetingId.value || null,
+        leaderId: sessionLeader.value?.id || '',
+        memberIds: sessionMembers.value.map(m => m.id),
+        topic: getFullTopic(),
+        topicTitle: topicTitle.value.trim(),
+        topicContent: topicContent.value.trim(),
+        hostStyle: hostStyle.value || 'neutral',
+        leader: sessionLeader.value ? { ...sessionLeader.value } : null,
+        members: sessionMembers.value.map(m => ({ ...m })),
+        materials: [...pendingFiles.value, ...historicMaterials.value].map(f => ({ name: f.name, content: f.content }))
+      };
+    }
+
+    /** 从快照恢复配置页所有字段（统一入口，消除重复代码） */
+    function restoreFromSnapshot(snap) {
+      if (!snap) return;
+      // 话题
+      if (snap.topicTitle != null) {
+        topicTitle.value = snap.topicTitle || '';
+        topicContent.value = snap.topicContent || '';
+      } else if (snap.topic) {
+        const sp = splitTopic(null, snap.topic);
+        topicTitle.value = sp.title;
+        topicContent.value = sp.content;
+      }
+      // 角色
+      if (snap.leader) sessionLeader.value = { ...snap.leader };
+      if (snap.members) sessionMembers.value = snap.members.map(m => ({ ...m }));
+      if (snap.leaderId) selectedLeaderId.value = snap.leaderId;
+      if (snap.memberIds) selectedMemberIds.value = [...snap.memberIds];
+      // 材料
+      if (snap.materials) historicMaterials.value = snap.materials.map(m => ({ ...m }));
+      // 主持风格
+      if (snap.hostStyle) {
+        hostStyle.value = snap.hostStyle;
+        localStorage.setItem(HOST_STYLE_KEY, snap.hostStyle);
+      }
+    }
+
+    function goHome() {
+      // 关闭所有连接
+      if (currentSse) { currentSse.abort(); currentSse = null; }
+      if (controlWs) { controlWs.close(); controlWs = null; }
+      // 数据自动持久化，直接返回首页，无需确认
+      isViewingHistory.value = false;
+      isDiscussing.value = false;
+      isPaused.value = false;
+      historicConfig.value = null;
+      resumeSnapshot.value = null;
+      messages.value = [];
+      meetingState.value = null;
+      meetingId.value = null;
+      topicTitle.value = '';
+      topicContent.value = '';
+      selectedLeaderId.value = '';
+      selectedMemberIds.value = [];
+      sessionLeader.value = null;
+      sessionMembers.value = [];
+      currentPage.value = 'home';
+      loadSessions();
+    }
+    function goSetupFromHistory() {
+      // 历史记录页点击"重新配置"：从 historicConfig 恢复完整角色数据
+      const hc = historicConfig.value;
+      isViewingHistory.value = false;
+      messages.value = [];
+      meetingId.value = null;
+
+      // 预填话题（用 splitTopic 正确拆分）
+      const sp0 = splitTopic(hc.discussion_title, hc.topic);
+      topicTitle.value = sp0.title;
+      topicContent.value = sp0.content;
+
+      // 从历史记录直接恢复完整角色对象（不再依赖全局agents池匹配）
+      if (hc.hostConfig) {
+        const hostCfg = hc.hostConfig;
+        // 找 model_config 中的 platform 信息用于模型匹配
+        const mc = hostCfg.model_config || {};
+        sessionLeader.value = {
+          id: hostCfg.id || 'host_' + Date.now(),
+          name: hostCfg.name || '主持人',
+          role_prompt: hostCfg.system_prompt || '',
+          model: hostCfg.model || '',
+          platform: mc.baseUrl ? 'custom' : '',
+          color: hostCfg.color || '#f5a623',
+          model_config: mc,
+          is_leader: true,
+        };
+      }
+
+      if (hc.guestConfigs && hc.guestConfigs.length) {
+        sessionMembers.value = hc.guestConfigs.map(g => {
+          const mc = g.model_config || {};
+          return {
+            id: g.id || 'guest_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+            name: g.name || '',
+            role_prompt: g.system_prompt || '',
+            model: g.model || '',
+            platform: mc.baseUrl ? 'custom' : '',
+            color: g.color || '#4f8ef7',
+            model_config: mc,
+            is_leader: false,
+          };
+        });
+      } else {
+        sessionMembers.value = [];
+      }
+
+      // 恢复主持风格
+      if (hc.hostStyle) {
+        hostStyle.value = hc.hostStyle;
+        localStorage.setItem(HOST_STYLE_KEY, hc.hostStyle);
+      }
+
+      meetingState.value = null;
+      meetingAgenda.value = null;
+      guestStatuses.value = [];
+      currentPage.value = 'setup';
+    }
+
+    function goSetup(clearConfig = true) {
+      isViewingHistory.value = false;
+      messages.value = [];
+      if (clearConfig) {
+        topicTitle.value = '';
+        topicContent.value = '';
+        selectedLeaderId.value = '';
+        selectedMemberIds.value = [];
+        sessionLeader.value = null;
+        sessionMembers.value = [];
+        pendingFiles.value = [];
+        historicMaterials.value = [];
+        resumeSnapshot.value = null;
+        meetingId.value = null;
+        historicConfig.value = null;
+      }
+      currentPage.value = 'setup';
+    }
+
+    async function loadAgents() {
+      try {
+        const r = await fetch(`${API_V1}/agents/`);
+        agents.value = await r.json();
+      } catch(e) {
+        console.warn('加载智能体列表失败（旧后端未启动？）', e);
+        agents.value = [];
+      }
+    }
+    async function loadSessions() {
+      try {
+        const r = await fetch(`${API}/history`);
+        sessions.value = await r.json();
+      } catch(e) {
+        console.warn('加载历史记录失败', e);
+        sessions.value = [];
+      }
+    }
+
+    function toggleMember(id) {
+      const idx = selectedMemberIds.value.indexOf(id);
+      if (idx >= 0) selectedMemberIds.value.splice(idx, 1);
+      else selectedMemberIds.value.push(id);
+    }
+
+    function openAddAgent(isLeader = false) {
+      editingAgent.value = null;
+      form.value = { name:'', avatar:'', role_prompt:'', platform:'custom', model:'', color:'#4f8ef7', modelIdx: userModels.value.length > 0 ? 0 : -1, is_leader: isLeader };
+      showModal.value = true;
+    }
+
+    function openEditAgent(agent) {
+      editingAgent.value = agent;
+      const idx = userModels.value.findIndex(m => m.platform === agent.platform && m.model === agent.model);
+      form.value = { name: agent.name, avatar: agent.avatar, role_prompt: agent.role_prompt, platform: agent.platform, model: agent.model, color: agent.color, modelIdx: idx >= 0 ? idx : -1, is_leader: agent.is_leader };
+      showModal.value = true;
+    }
+
+    async function saveAgent() {
+      if (!form.value.name || !form.value.role_prompt) {
+        alert(t('alert.name_prompt'));
+        return;
+      }
+      const selModel = userModels.value[form.value.modelIdx];
+      const isLeader = editingAgent.value ? !!editingAgent.value.is_leader : !!(form.value.is_leader === true);
+      const agentData = {
+        id: editingAgent.value?.id || ('tmp_' + Date.now()),
+        name: form.value.name,
+        role_prompt: form.value.role_prompt,
+        platform: selModel ? selModel.platform : 'custom',
+        model: selModel ? selModel.model : '',
+        is_leader: isLeader,
+        color: form.value.color,
+      };
+      if (isLeader) {
+        sessionLeader.value = agentData;
+      } else {
+        if (editingAgent.value) {
+          const idx = sessionMembers.value.findIndex(m => m.id === editingAgent.value.id);
+          if (idx >= 0) sessionMembers.value[idx] = agentData;
+          else sessionMembers.value.push(agentData);
+        } else {
+          sessionMembers.value.push(agentData);
+        }
+      }
+      showModal.value = false;
+    }
+
+    function openEditSessionAgent(agent, isLeader, idx) {
+      editingAgent.value = agent;
+      // 模型匹配：优先 platform+model，其次用 model_config 中的 baseUrl+model
+      let mIdx = userModels.value.findIndex(m => m.platform === agent.platform && m.model === agent.model);
+      if (mIdx < 0 && agent.model_config) {
+        // 从历史恢复时可能没有 platform 字段，改用 baseUrl 匹配
+        const mc = agent.model_config;
+        mIdx = userModels.value.findIndex(m =>
+          m.model === agent.model &&
+          ((mc.baseUrl && m.baseUrl === mc.baseUrl) || (!mc.baseUrl && !m.baseUrl))
+        );
+      }
+      form.value = { name: agent.name, role_prompt: agent.role_prompt, platform: agent.platform || 'custom', model: agent.model, color: agent.color, modelIdx: mIdx >= 0 ? mIdx : -1, is_leader: isLeader };
+      showModal.value = true;
+    }
+
+    async function quickDeleteAgent(agent) {
+      if (!confirm(`确定删除「${agent.name}」？`)) return;
+      await fetch(`${API_V1}/agents/${agent.id}`, { method: 'DELETE' });
+      await loadAgents();
+    }
+
+    async function deleteAgent() {
+      if (!editingAgent.value) return;
+      if (!confirm(`确定删除「${editingAgent.value.name}」？`)) return;
+      await fetch(`${API_V1}/agents/${editingAgent.value.id}`, { method: 'DELETE' });
+      showModal.value = false;
+      await loadAgents();
+    }
+
+    let currentSse = null;
+
+    // ─── 构建模型配置 ───
+    // ─── 文件上传 ───
+    function onFileSelect(e) {
+      for (const file of e.target.files) {
+        if (!pendingFiles.value.find(f => f.name === file.name)) {
+          pendingFiles.value.push(file);
+        }
+      }
+      e.target.value = '';
+    }
+    function removePendingFile(idx) {
+      pendingFiles.value.splice(idx, 1);
+    }
+    async function uploadPendingFiles(mid) {
+      for (const file of pendingFiles.value) {
+        const fd = new FormData();
+        fd.append('file', file);
+        await fetch(`${API}/meetings/${mid}/materials`, { method: 'POST', body: fd });
+      }
+    }
+
+    function buildModelConfig(agent) {
+      // 优先使用 userModels 匹配（用户当前配置的模型）
+      const m = userModels.value.find(um => um.platform === agent.platform && um.model === agent.model);
+      if (m) return { model: agent.model, baseUrl: m.baseUrl, apiKey: m.apiKey };
+      // 其次用历史恢复时携带的 model_config（含 baseUrl/apiKey）
+      if (agent.model_config && agent.model_config.baseUrl) return agent.model_config;
+      // 兜底
+      return {};
+    }
+
+    // ─── 启动流程：创建会议 → 生成议程 ───
+    // "返回对话"按钮逻辑：配置未变 → 直接回会谈页；配置已变 → 弹确认
+    async function resumeOrNewMeeting() {
+      const snap = resumeSnapshot.value;
+      if (!snap) return;
+      const configChanged =
+        snap.leaderId !== (sessionLeader.value?.id || '') ||
+        snap.topic !== getFullTopic() ||
+        snap.hostStyle !== (hostStyle.value || 'neutral') ||
+        JSON.stringify([...snap.memberIds].sort()) !== JSON.stringify(sessionMembers.value.map(m=>m.id).sort());
+      if (configChanged) {
+        showNewMeetingConfirm.value = true;
+      } else {
+        // 配置未变，回会谈页（会谈仍处于暂停状态）
+        // 不清快照，留给下次暂停→返回配置使用
+        meetingId.value = snap.meetingId;
+
+        // ── 完整恢复历史数据（与 viewSession 保持一致）──
+        try {
+          const res = await fetch(`${API}/history/${snap.meetingId}`);
+          if (res.ok) {
+            const record = await res.json();
+            const hc = record.host_config || {};
+            const gc = record.guests_config || [];
+            const isEnded = record.state === 'ended';
+
+            // 1) 恢复参与者（顶栏显示）
+            sessionLeader.value = hc.id ? { id: hc.id, name: hc.name, color: hc.color||'#f59e0b', role_prompt: hc.role_prompt||'', platform: hc.platform||'', model: hc.model||'', is_leader: true } : null;
+            sessionMembers.value = gc.map(g => ({ id: g.id, name: g.name, color: g.color||'#4f8ef7', role_prompt: g.role_prompt||'', platform: g.platform||'', model: g.model||'', is_leader: false }));
+
+            // 2) 恢复议程 + 进度条
+            if (record.agenda) {
+              const ag = record.agenda;
+              meetingAgenda.value = ag.sections ? { topic: ag.topic||record.topic, sections: ag.sections } : ag;
+              meetingCurrentSection.value = isEnded ? (ag.sections?.length || 0) : 0;
+            }
+
+            // 3) 恢复消息列表（含板块分隔线，与 viewSession 一致格式）
+            const history = record.history || [];
+            const rawAgenda = record.agenda || null;
+            let agendaSections = [];
+            if (rawAgenda && typeof rawAgenda === 'object' && rawAgenda.sections) {
+              agendaSections = rawAgenda.sections;
+            }
+            const sectionTitles = agendaSections.map((s, i) => s.title || s.description || `第${i+1}环节`);
+            const loaded = [];
+            let lastSectionIdx = -1;
+            for (let i = 0; i < history.length; i++) {
+              const m = history[i];
+              const curSectionIdx = m.section_idx ?? -1;
+              if (curSectionIdx !== lastSectionIdx && curSectionIdx >= 0) {
+                const secTitle = curSectionIdx < sectionTitles.length ? sectionTitles[curSectionIdx] : `第 ${curSectionIdx + 1} 板块`;
+                loaded.push({ id: 'sec_' + curSectionIdx + '_' + Date.now(), type: 'section_start', content: '📍 ' + secTitle });
+                lastSectionIdx = curSectionIdx;
+              }
+              loaded.push({
+                id: 'hist_' + i,
+                type: m.speaker_type === 'user' ? 'user' : 'agent',
+                speakerId: m.speaker_id,
+                speakerName: m.speaker_name,
+                speakerType: m.speaker_type,
+                isHost: m.speaker_id === 'host',
+                color: m.color || '#4f8ef7',
+                name: m.speaker_name,
+                content: m.content,
+                streaming: false,
+                section: (curSectionIdx >= 0 && curSectionIdx < sectionTitles.length) ? sectionTitles[curSectionIdx] : '',
+              });
+            }
+            if (record.summary) {
+              loaded.push({
+                id: 'summary_hist', type: 'agent', speakerId: 'system',
+                speakerName: '会议总结', speakerType: 'system', isHost: false,
+                color: '#888', name: '会议总结', content: record.summary, streaming: false,
+              });
+            }
+            messages.value = loaded;
+
+            // 4) 恢复状态
+            meetingState.value = record.state || 'ended';
+            statusText.value = isEnded ? t('chat.meeting_done') : (record.state === 'audience_qa' ? t('chat.audience_qa') : record.topic);
+
+            // 5) 恢复嘉宾状态
+            guestStatuses.value = gc.map(g => ({ id: g.id, name: g.name, color: g.color||'#4f8ef7', status: 'ready' }));
+
+            // 6) 补议程气泡（如果还没有的话）
+            if (meetingAgenda.value && !messages.value.some(m => m.type === 'agenda')) {
+              const sections = meetingAgenda.value.sections || [];
+              messages.value.unshift({
+                id: 'ag_snap', type: 'agenda', isLatest: false,
+                hostName: sessionLeader.value?.name || '主持人',
+                color: sessionLeader.value?.color || '#f5a623',
+                title: meetingAgenda.value.topic || '会议议程',
+                sections: sections.map(s => ({ title: s.title, description: s.description, duration_minutes: s.duration_minutes })),
+                streaming: false
+              });
+            }
+          }
+        } catch(e) { console.warn('恢复历史消息失败', e); }
+
+        isPaused.value = true;
+        isDiscussing.value = true;
+        currentPage.value = 'chat';
+        // 注意：不设 isViewingHistory=true，这是暂停续跑而非历史查看
+
+        // 重建 WebSocket 控制通道（仅用于控制指令，不触发续跑）
+        connectControlWs(snap.meetingId);
+
+        // ⚠️ 绝对不调 streamSse / resume/stream —— 必须等用户点▶才续跑！
+        // 之前 bug：此处如果建了 SSE 流，会自动触发续跑并跑完整个议程
+
+        // 滚动到底部（nextTick 等 DOM 渲染完再滚）
+        await nextTick(() => {
+          const el = chatArea.value;
+          if (el) el.scrollTop = el.scrollHeight;
+        });
+      }
+    }
+
+    async function startDiscussion() {
+      if (!canStart.value) return;
+
+      _doStartDiscussion();
+    }
+
+    function confirmNewMeeting() {
+      showNewMeetingConfirm.value = false;
+      resumeSnapshot.value = null;
+      _doStartDiscussion();
+    }
+
+    function cancelNewMeeting() {
+      restoreFromSnapshot(resumeSnapshot.value);
+      showNewMeetingConfirm.value = false;
+    }
+
+    async function _doStartDiscussion() {
+      const q = getFullTopic();
+      const title = topicTitle.value.trim();
+
+      // 重置状态
+      messages.value = [];
+      currentSpeakerBuffers = {};
+      meetingId.value = '';
+      meetingState.value = '';
+      meetingAgenda.value = null;
+      meetingCurrentSection.value = 0;
+      guestStatuses.value = [];
+      agendaFeedback.value = '';
+      isPaused.value = false;
+      isViewingHistory.value = false;
+      // 进入对话页时冻结快照
+      saveSnapshot(null);
+      currentPage.value = 'chat';
+
+      messages.value.push({ id: Date.now(), type: 'user', content: q, topicTitle: title || q, topicContent: title ? topicContent.value.trim() : '' });
+      isDiscussing.value = true;
+      statusText.value = t('chat.creating');
+
+      // 找主持人 agent
+      const hostAgent = sessionLeader.value;
+      const guestAgents = sessionMembers.value;
+
+      try {
+        // 1. 创建会议
+        const createRes = await fetch(`${API}/meetings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            topic: q,
+            discussion_title: title || null,
+            tavily_key: tavilyKey.value || null,
+            embedding_config: (embConfig.value && embConfig.value.apiKey) ? embConfig.value : null,
+            host_style: hostStyle.value || 'neutral',
+            host: {
+              name: hostAgent?.name || '主持人',
+              system_prompt: hostAgent?.role_prompt || '你是专业会议主持人。',
+              model: hostAgent?.model || '',
+              color: hostAgent?.color || '#f5a623',
+              model_config: buildModelConfig(hostAgent || {})
+            },
+            guests: guestAgents.map(g => ({
+              id: g.id,
+              name: g.name,
+              system_prompt: g.role_prompt || '',
+              model: g.model || '',
+              color: g.color || '#4f8ef7',
+              model_config: buildModelConfig(g)
+            }))
+          })
+        });
+        const createData = await createRes.json();
+        meetingId.value = createData.meeting_id;
+        // 会议创建后更新快照里的 meetingId
+        if (resumeSnapshot.value) resumeSnapshot.value.meetingId = createData.meeting_id;
+
+        // 上传背景材料（新文件 + 历史材料）
+        if (pendingFiles.value.length || historicMaterials.value.length) {
+          statusText.value = t('chat.uploading_materials');
+          if (pendingFiles.value.length) await uploadPendingFiles(createData.meeting_id);
+          // 历史材料直接 POST JSON 注入（不走文件上传接口，内容已提取）
+          for (const m of historicMaterials.value) {
+            await fetch(`${API}/meetings/${createData.meeting_id}/materials/inject`, {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({ name: m.name, content: m.content })
+            });
+          }
+        }
+
+        // 初始化嘉宾状态
+        guestStatuses.value = guestAgents.map(g => ({ id: g.id, name: g.name, color: g.color, status: 'preparing' }));
+
+        // 2. 连接 WebSocket 控制通道
+        connectControlWs(createData.meeting_id);
+
+        // 3. SSE 生成议程
+        statusText.value = t('chat.generating_agenda');
+        await streamSse(`${API}/meetings/${createData.meeting_id}/agenda/stream`);
+
+      } catch (e) {
+        isDiscussing.value = false;
+        statusText.value = t('chat.error') + ': ' + e.message;
+      }
+    }
+
+    // ─── 确认议程 → 嘉宾准备 → 开始讨论 ───
+    async function confirmAgenda() {
+      if (!meetingId.value) return;
+      meetingState.value = 'guests_preparing';
+      statusText.value = t('chat.guests_preparing');
+      // 所有嘉宾置为 preparing
+      guestStatuses.value.forEach(g => g.status = 'preparing');
+
+      await streamSse(`${API}/meetings/${meetingId.value}/prepare/stream`);
+    }
+
+    async function regenerateAgenda() {
+      if (!meetingId.value || !agendaFeedback.value.trim()) return;
+      // 用户消息推入
+      messages.value.push({ id: 'uf_' + Date.now(), type: 'user', content: agendaFeedback.value });
+      scrollBottom();
+      const userMsg = agendaFeedback.value;
+      agendaFeedback.value = '';
+      // 主持人回复气泡（流式）
+      const hostName = sessionLeader.value?.name || '主持人';
+      const hostColor = sessionLeader.value?.color || '#f59e0b';
+      const replyMsg = { id: 'hr_' + Date.now(), type: 'agent', isHost: true, name: hostName, color: hostColor, content: '', streaming: true };
+      messages.value.push(replyMsg);
+      scrollBottom();
+      // 调用 /host/chat 接口
+      const res = await fetch(`${API}/meetings/${meetingId.value}/host/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meeting_id: meetingId.value, user_feedback: userMsg })
+      });
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      let curEvent = '';
+      console.log('[host/chat] 开始接收流...');
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) { console.log('[host/chat] 流结束'); break; }
+        buf += dec.decode(value, { stream: true });
+        console.log('[host/chat] 原始缓冲区:', JSON.stringify(buf));
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        console.log('[host/chat] 分割后lines:', lines, '剩余buf:', JSON.stringify(buf));
+        for (const rawLine of lines) {
+          const line = rawLine.replace(/\r$/, '');
+          console.log('[host/chat] 处理行:', JSON.stringify(line), 'curEvent:', curEvent);
+          if (line.startsWith('event:')) {
+            curEvent = line.slice(6).trim();
+            console.log('[host/chat] 设置curEvent:', curEvent);
+          } else if (line.startsWith('data:')) {
+            const dataStr = line.slice(5).trim();
+            console.log('[host/chat] data字符串:', dataStr);
+            try {
+              const d = JSON.parse(dataStr);
+              console.log('[host/chat] 解析成功:', d, 'curEvent:', curEvent);
+              if (curEvent === 'host_chat' && d.chunk) {
+                console.log('[host/chat] 添加chunk到回复:', d.chunk);
+                // 直接添加chunk，不在这里过滤（标记可能被拆分）
+                const idx = messages.value.indexOf(replyMsg);
+                if (idx !== -1) {
+                  messages.value[idx].content += d.chunk;
+                }
+                scrollBottom();
+              } else if (curEvent === 'agenda') {
+                messages.value.forEach(m => { if (m.type === 'agenda') m.isLatest = false; });
+                const sections = (d.sections || []);
+                messages.value.push({
+                  id: 'ag_' + Date.now(), type: 'agenda', isLatest: true,
+                  title: d.title || '议程方案',
+                  sections: sections.map(s => ({ title: s.title, description: s.description, duration_minutes: s.duration_minutes, order: s.order })),
+                  totalDuration: d.total_duration
+                });
+                scrollBottom();
+              } else {
+                console.log('[host/chat] 未匹配条件, curEvent:', curEvent, 'd:', d);
+              }
+            } catch (e) {
+              console.error('[host/chat] JSON解析失败:', e, '数据:', dataStr);
+            }
+            curEvent = '';
+          }
+        }
+      }
+      // 流式接收完成后，统一过滤完整内容中的标记
+      const idx = messages.value.indexOf(replyMsg);
+      if (idx !== -1) {
+        messages.value[idx].content = messages.value[idx].content
+          .replace(/\[NEED_REGENERATE\]/g, '')
+          .replace(/\[CALL:[^\]]*\]/g, '')
+          .trim();
+        messages.value[idx].streaming = false;
+      }
+      console.log('[host/chat] 处理完成，最终回复内容:', replyMsg.content);
+    }
+
+    // ─── SSE 流式读取 ───
+    async function streamSse(url, method = 'GET', body = null) {
+      if (currentSse) { currentSse.abort(); }
+      const controller = new AbortController();
+      currentSse = controller;
+
+      const opts = { signal: controller.signal };
+      if (method === 'POST') {
+        opts.method = 'POST';
+        opts.headers = { 'Content-Type': 'application/json' };
+        opts.body = JSON.stringify(body);
+      }
+      const res = await fetch(url, opts);
+      if (!res.ok) throw new Error('SSE 连接失败');
+      await readSseStream(res.body.getReader());
+    }
+
+    async function readSseStream(reader) {
+      const decoder = new TextDecoder();
+      let buf = '';
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const parts = buf.split('\n\n');
+          buf = parts.pop();
+          for (const part of parts) {
+            const evLine = part.match(/^event: (.+)/m);
+            const dataLine = part.match(/^data: (.+)/ms);
+            if (evLine && dataLine) {
+              try { handleSseEvent(evLine[1].trim(), JSON.parse(dataLine[1].trim())); }
+              catch(e) { console.warn('SSE parse err', e); }
+            }
+          }
+        }
+      } catch (e) {
+        // 网络断开或 reader 被 abort
+        if (e.name !== 'AbortError') {
+          console.error('SSE 连接中断:', e);
+          statusText.value = t('chat.connection_lost');
+          isDiscussing.value = false;
+        }
+      }
+    }
+
+    // ─── SSE 事件处理 ───
+    function handleSseEvent(event, data) {
+      switch (event) {
+        case 'state_change': {
+          meetingState.value = data.state;
+          const stateLabels = {
+            preparing: t('chat.preparing_host'),
+            agenda_confirming: t('chat.agenda_confirming'),
+            guests_preparing: t('chat.guests_preparing'),
+            ready: t('chat.ready_start'),
+            warmup: t('chat.warmup'),
+            section: t('chat.discussing'),
+            free_talk: t('chat.free_talk'),
+            audience_qa: t('chat.audience_qa'),
+            summary: t('chat.summarizing'),
+            ended: t('chat.meeting_done')
+          };
+          statusText.value = stateLabels[data.state] || data.state;
+          if (data.state === 'ready') {
+            guestStatuses.value.forEach(g => g.status = 'ready');
+            startMainDiscussion();
+          }
+          if (data.state === 'audience_qa' || data.state === 'ended') {
+            // 进入观众互动或结束时，解除 isDiscussing 锁定，允许用户操作
+            isDiscussing.value = false;
+            isPaused.value = false;
+          }
+          break;
+        }
+        case 'audience_qa_start': {
+          messages.value.push({
+            id: 'sys_' + Date.now(), type: 'system_notice',
+            content: data.msg || '议程已完成，进入观众互动环节'
+          });
+          scrollBottom();
+          break;
+        }
+        case 'paused': {
+          // 后端发言结束后暂停，前端更新状态、解锁按钮
+          isPaused.value = true;
+          isDiscussing.value = true;  // 保持 isDiscussing=true，只是暂停，显示"继续▶"按钮
+          statusText.value = t('chat.paused');
+          break;
+        }
+        case 'resumed': {
+          // 续跑开始，展示系统提示
+          messages.value.push({
+            id: 'sys_' + Date.now(), type: 'system_notice',
+            content: data.msg || '会谈已恢复，从上次暂停处继续'
+          });
+          scrollBottom();
+          break;
+        }
+        case 'agenda': {
+          meetingAgenda.value = data;
+          messages.value.forEach(m => { if (m.type === 'agenda') m.isLatest = false; });
+          const agendaVer = messages.value.filter(m => m.type === 'agenda').length + 1;
+          // 优先用当前会谈主持人，而不是全局agents池
+          const hostName = sessionLeader.value?.name || '主持人';
+          const hostColor = sessionLeader.value?.color || '#3b82f6';
+          messages.value.push({
+            id: 'agenda_' + Date.now(),
+            type: 'agenda',
+            sections: data.sections || [],
+            hostName,
+            color: hostColor,
+            version: agendaVer,
+            isLatest: true
+          });
+          scrollBottom();
+          break;
+        }
+        case 'guests_ready': {
+          guestStatuses.value.forEach(g => g.status = 'ready');
+          break;
+        }
+        case 'section_start': {
+          meetingCurrentSection.value = data.index;
+          messages.value.push({
+            id: 'sec_' + data.index,
+            type: 'section_start',
+            content: `第 ${data.index + 1} 板块：${data.section.title}`
+          });
+          scrollBottom();
+          break;
+        }
+        case 'message_start': {
+          const isHost = data.speaker_type === 'host';
+          // 用 data.id（发言ID）做 buffer key，避免同一人连续发言时冲突
+          const spkKey = data.id || data.speaker_id || Date.now();
+          const msgId = 'spk_' + spkKey;
+          currentSpeakerBuffers[spkKey] = { id: msgId, content: '', speakerId: data.speaker_id };
+          messages.value.push({
+            id: msgId,
+            type: 'agent',
+            name: data.speaker_name,
+            color: data.color,
+            isHost,
+            section: meetingAgenda.value?.sections[meetingCurrentSection.value]?.title || '',
+            content: '',
+            streaming: true
+          });
+          statusText.value = `${data.speaker_name} ${t('chat.speaking')}`;
+          scrollBottom();
+          break;
+        }
+        case 'token': {
+          // 优先用发言 ID，兼容旧格式用 speaker_id
+          const spkKey = data.id || data.speaker_id;
+          const buf = currentSpeakerBuffers[spkKey];
+          if (buf) {
+            buf.content += data.token;
+            const msg = messages.value.find(m => m.id === buf.id);
+            if (msg) msg.content = buf.content;
+            scrollBottom();
+          }
+          break;
+        }
+        case 'message_end': {
+          const spkKey = data.id || data.speaker_id;
+          const buf = currentSpeakerBuffers[spkKey];
+          if (buf) {
+            const msg = messages.value.find(m => m.id === buf.id);
+            if (msg) {
+              msg.streaming = false;
+              // 如果是总结阶段的主持人发言，记录到 summaryContent
+              if (meetingState.value === 'summary' && msg.isHost) {
+                summaryContent.value = buf.content;
+              }
+            }
+          }
+          break;
+        }
+        case 'report_done': {
+          // 报告已追加在消息流中（token 方式），此处标记完成
+          const rpt = messages.value.find(m => m.type === 'report');
+          if (rpt) rpt.streaming = false;
+          break;
+        }
+        case 'error': {
+          statusText.value = t('chat.error') + ': ' + (data.msg || t('chat.unknown_error'));
+          isDiscussing.value = false;
+          break;
+        }
+      }
+    }
+
+    async function startMainDiscussion() {
+      statusText.value = t('chat.meeting_start');
+      messages.value.push({ id: 'tip_start', type: 'state_tip', content: '会议正式开始', color: '#3b82f6' });
+      await streamSse(`${API}/meetings/${meetingId.value}/discuss/stream`);
+    }
+
+    // ─── WebSocket 控制通道 ───
+    function connectControlWs(mid) {
+      // 先关闭已有连接
+      if (controlWs) {
+        controlWs.onclose = null;  // 防止触发重连
+        controlWs.close();
+        controlWs = null;
+      }
+      clearTimeout(_wsReconnectTimer);
+
+      try {
+        controlWs = new WebSocket(`${WS_BASE}/meetings/${mid}/ws`);
+      } catch(e) {
+        console.warn('WebSocket 创建失败', e);
+        _scheduleWsReconnect(mid);
+        return;
+      }
+
+      controlWs.onmessage = (e) => {
+        const d = JSON.parse(e.data);
+        if (d.action === 'pause') isPaused.value = true;
+        if (d.action === 'resume') isPaused.value = false;
+      };
+
+      controlWs.onerror = (e) => {
+        console.warn('WebSocket 错误', e);
+      };
+
+      controlWs.onclose = (e) => {
+        // 非正常关闭才重连（用户主动离开不重连）
+        if (e && !e.wasClean && currentPage.value === 'chat' && meetingId.value) {
+          console.warn('WebSocket 意外断开，3秒后重连');
+          _scheduleWsReconnect(mid);
+        }
+      };
+    }
+
+    function _scheduleWsReconnect(mid) {
+      clearTimeout(_wsReconnectTimer);
+      _wsReconnectTimer = setTimeout(() => {
+        if (currentPage.value === 'chat' && meetingId.value === mid) {
+          connectControlWs(mid);
+        }
+      }, 3000);
+    }
+
+    function sendControl(action, extra = {}) {
+      if (action === 'resume') {
+        // resume 需要区分两种场景：
+        // 1) SSE 流还活着（对话中暂停）→ 只发 WebSocket resume
+        // 2) SSE 流已断开（从配置页返回）→ 需调 resume/stream 重建 SSE 流
+        isPaused.value = false;
+        const sseAlive = currentSse && !currentSse.signal?.aborted;
+        if (sseAlive) {
+          // 场景1：SSE 流还在，只发 WebSocket resume
+          if (controlWs && controlWs.readyState === WebSocket.OPEN) {
+            controlWs.send(JSON.stringify({ action: 'resume' }));
+          }
+        } else if (meetingId.value) {
+          // 场景2：SSE 流断了，用 resume/stream 重建
+          streamSse(`${API}/meetings/${meetingId.value}/resume/stream`, 'GET', null).catch(e => {
+            console.error('续跑SSE失败', e);
+            statusText.value = t('chat.resume_failed');
+          });
+        }
+        return;
+      }
+      if (!controlWs || controlWs.readyState !== WebSocket.OPEN) return;
+      controlWs.send(JSON.stringify({ action, ...extra }));
+      if (action === 'pause') isPaused.value = true;
+    }
+
+    function callOnGuest() {
+      if (!callTarget.value) return;
+      sendControl('call_on_guest', { target: callTarget.value });
+      callTarget.value = '';
+    }
+
+    function sendFollowUp() {
+      if (!chatInput.value.trim() || isDiscussing.value) return;
+      sendControl('custom_instruction', { instruction: chatInput.value.trim() });
+      messages.value.push({ id: Date.now(), type: 'user', content: chatInput.value.trim() });
+      chatInput.value = '';
+    }
+
+    async function sendAudienceQuestion() {
+      const q = chatInput.value.trim();
+      if (!q || isDiscussing.value) return;
+      chatInput.value = '';
+      messages.value.push({ id: Date.now(), type: 'user', content: q });
+      // 显示"思考中"提示，让用户知道没断
+      const thinkingId = 'thinking_' + Date.now();
+      messages.value.push({
+        id: thinkingId, type: 'system_notice',
+        content: '🤔 主持人正在引导嘉宾回答，请稍候...'
+      });
+      scrollBottom();
+      isDiscussing.value = true;
+      statusText.value = t('chat.host_thinking');
+      try {
+        await streamSse(`${API}/meetings/${meetingId.value}/audience/ask`, 'POST', { meeting_id: meetingId.value, user_feedback: q });
+        // 成功完成：移除"思考中"提示
+        messages.value = messages.value.filter(m => m.id !== thinkingId);
+      } catch(e) {
+        // 失败：更新提示为错误信息
+        const idx = messages.value.findIndex(m => m.id === thinkingId);
+        if (idx !== -1) messages.value[idx].content = '❌ 提问失败，请刷新页面重试';
+      }
+      isDiscussing.value = false;
+    }
+
+    async function generateSummary() {
+      isDiscussing.value = true;
+      summaryContent.value = '';
+      await streamSse(`${API}/meetings/${meetingId.value}/summarize`, 'POST', {});
+      isDiscussing.value = false;
+    }
+
+    async function _saveToFile(content, defaultName) {
+      // 优先用 File System Access API（让用户选保存位置）
+      if ('showSaveFilePicker' in window) {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: defaultName,
+            types: [{ description: '文本文件', accept: { 'text/plain': ['.txt'] } }],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(content);
+          await writable.close();
+          return true;
+        } catch(e) {
+          if (e.name === 'AbortError') return false;  // 用户取消
+        }
+      }
+      // 降级：直接下载到默认目录
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = defaultName;
+      a.click();
+      URL.revokeObjectURL(url);
+      return true;
+    }
+
+    async function downloadSummary() {
+      let content = summaryContent.value || '';
+      if (!content) {
+        const lines = [`【${historicConfig.value?.topic || meetingAgenda.value?.topic || '会谈'}】`, '', '=== 完整对话记录 ===', ''];
+        messages.value.forEach(m => {
+          if (m.type === 'agenda') {
+            lines.push(`【议程】${m.content}`);
+          } else if (m.speakerType === 'system' && m.isSummary) {
+            lines.push(`【总结】\n${m.content}`);
+          } else {
+            const tag = m.isHost ? '[主持人]' : `[${m.name || '嘉宾'}]`;
+            lines.push(`${tag} ${m.content}`);
+          }
+          lines.push('');
+        });
+        content = lines.join('\n');
+      }
+      const topic = historicConfig.value?.topic || meetingAgenda.value?.topic || '会谈';
+      const ts = new Date().toLocaleDateString('zh').replace(/\//g, '-');
+      await _saveToFile(content, `会议记录_${topic}_${ts}.txt`);
+    }
+
+    async function saveSummaryTxt() {
+      if (!summaryContent.value) return;
+      const topic = meetingAgenda.value?.topic || '会谈';
+      const ts = new Date().toLocaleDateString('zh').replace(/\//g, '-');
+      await _saveToFile(summaryContent.value, `会议总结_${topic}_${ts}.txt`);
+    }
+
+    function stopDiscussion() {
+      sendControl('pause');
+      isDiscussing.value = false;
+      statusText.value = t('chat.stopped');
+    }
+
+    async function resumeDiscussion() {
+      const hc = historicConfig.value;
+      if (!hc || !hc.meetingId) return;
+      // 立即切换为正常对话页面
+      isViewingHistory.value = false;
+      isDiscussing.value = true;
+      isPaused.value = false;
+      meetingId.value = hc.meetingId;
+      meetingState.value = 'section';
+      statusText.value = t('chat.resuming');
+
+      // 恢复嘉宾状态列表（参与者栏）
+      const gc = hc.guestConfigs || [];
+      guestStatuses.value = gc.map(g => ({
+        id: g.id, name: g.name, color: g.color || '#4f8ef7', status: 'ready'
+      }));
+
+      // 恢复参与者栏显示（selectedLeaderId + selectedMemberIds）
+      selectedLeaderId.value = hc.hostId || hc.hostConfig?.id || '';
+      selectedMemberIds.value = gc.map(g => g.id).filter(Boolean);
+      // 同步恢复 topicTitle / topicContent（用 splitTopic 正确拆分）
+      const sp = splitTopic(hc.discussion_title, hc.topic);
+      topicTitle.value = sp.title;
+      topicContent.value = sp.content;
+      const rawHost = hc.hostConfig || {};
+      const hostMc = rawHost.model_config || {};
+      sessionLeader.value = rawHost.id ? {
+        id: rawHost.id, name: rawHost.name,
+        color: rawHost.color || '#f59e0b',
+        role_prompt: rawHost.system_prompt || rawHost.role_prompt || '',
+        platform: hostMc.baseUrl ? 'custom' : (rawHost.platform || ''),
+        model: rawHost.model || '',
+        is_leader: true,
+        model_config: hostMc
+      } : null;
+      sessionMembers.value = gc.map(g => {
+        const gMc = g.model_config || {};
+        return {
+          id: g.id, name: g.name,
+          color: g.color || '#4f8ef7',
+          role_prompt: g.system_prompt || g.role_prompt || '',
+          platform: gMc.baseUrl ? 'custom' : (g.platform || ''),
+          model: g.model || '',
+          is_leader: false,
+          model_config: gMc
+        };
+      });
+      // 恢复主持风格
+      if (hc.hostStyle) {
+        hostStyle.value = hc.hostStyle;
+        localStorage.setItem(HOST_STYLE_KEY, hc.hostStyle);
+      }
+      // 冻结快照
+      saveSnapshot(hc.meetingId);
+
+      // 恢复议程（如有），补一个议程气泡（插到消息流最前面）
+      if (hc.agenda) {
+        meetingAgenda.value = hc.agenda;
+        const agendaAlreadyInMsgs = messages.value.some(m => m.type === 'agenda');
+        if (!agendaAlreadyInMsgs) {
+          const sections = hc.agenda.sections || [];
+          messages.value.unshift({
+            id: 'ag_resume', type: 'agenda', isLatest: true,
+            hostName: hc.hostConfig?.name || '主持人',
+            color: hc.hostConfig?.color || '#f5a623',
+            title: hc.agenda.topic || '会议议程',
+            sections: sections.map(s => ({
+              title: s.title, description: s.description,
+              duration_minutes: s.duration_minutes, order: s.order
+            })),
+            totalDuration: hc.agenda.total_duration
+          });
+        }
+      }
+
+      // 建立 WebSocket 控制通道
+      connectControlWs(hc.meetingId);
+      // 启动 SSE 续跑流
+      try {
+        await streamSse(`${API}/meetings/${hc.meetingId}/resume/stream`, 'GET', null);
+      } catch(e) {
+        console.error('续跑失败', e);
+        statusText.value = t('chat.resume_failed2');
+        isDiscussing.value = false;
+      }
+    }
+
+    function reConfigFromHistory() {
+      // 从历史记录页跳回配置页，预填配置
+      if (historicConfig.value) {
+        const hc = historicConfig.value.hostConfig || {};
+        const gc = historicConfig.value.guestConfigs || [];
+        const sp2 = splitTopic(historicConfig.value.discussion_title, historicConfig.value.topic);
+        topicTitle.value = sp2.title;
+        topicContent.value = sp2.content;
+        sessionLeader.value = hc.id ? { id: hc.id, name: hc.name, color: hc.color||'#f59e0b', role_prompt: hc.role_prompt||'', platform: hc.platform||'', model: hc.model||'', is_leader: true } : null;
+        sessionMembers.value = gc.map(g => ({ id: g.id, name: g.name, color: g.color||'#4f8ef7', role_prompt: g.role_prompt||'', platform: g.platform||'', model: g.model||'', is_leader: false }));
+        historicMaterials.value = (historicConfig.value.materials || []).map(m => ({ name: m.name, content: m.content }));
+        if (historicConfig.value.hostStyle) {
+          hostStyle.value = historicConfig.value.hostStyle;
+          localStorage.setItem(HOST_STYLE_KEY, historicConfig.value.hostStyle);
+        }
+
+        // 未结束的会谈：保留快照，让配置页可以「← 返回对话」
+        // 已结束的会谈：清掉快照，只能开新会谈
+        if (historicConfig.value.state !== 'ended') {
+          // resumeSnapshot 已在 viewSession 里建好，保留即可
+        } else {
+          resumeSnapshot.value = null;
+          meetingId.value = null;
+          messages.value = [];
+        }
+      }
+      meetingState.value = null;
+      isViewingHistory.value = false;
+      historicConfig.value = null;
+      currentPage.value = 'setup';
+    }
+
+    function confirmLeave() {
+      if (currentSse) { currentSse.abort(); currentSse = null; }
+      if (controlWs) { controlWs.close(); controlWs = null; }
+      if (meetingId.value) {
+        fetch(`${API}/meetings/${meetingId.value}/save`, { method: 'POST' }).catch(()=>{});
+      }
+      isViewingHistory.value = false;
+      isDiscussing.value = false;
+      isPaused.value = false;
+      // resumeSnapshot 保留（让配置页显示"← 返回对话"）
+      // 只有 goHome / confirmNewMeeting 才清快照
+      meetingState.value = null;
+      // 从快照恢复完整角色数据、主持风格、话题
+      restoreFromSnapshot(resumeSnapshot.value);
+      currentPage.value = 'setup';
+    }
+
+    async function leaveWithSave() {
+      // 关闭连接
+      if (currentSse) { currentSse.abort(); currentSse = null; }
+      if (controlWs) { controlWs.close(); controlWs = null; }
+      // 强制持久化当前内存中的会谈（含已说完的消息）
+      if (meetingId.value) {
+        try { await fetch(`${API}/meetings/${meetingId.value}/save`, { method: 'POST' }); } catch(e) {}
+      }
+      showLeaveConfirm.value = false;
+      isViewingHistory.value = false;
+      // 保存快照引用再清空
+      const snap = resumeSnapshot.value;
+      resumeSnapshot.value = null;
+      messages.value = [];
+      meetingId.value = null;
+      meetingState.value = null;
+      if (_leaveTarget.value === 'home') {
+        currentPage.value = 'home';
+        loadSessions();
+      } else {
+        // 从快照恢复角色数据、话题
+        restoreFromSnapshot(snap);
+        currentPage.value = 'setup';
+      }
+    }
+
+    function leaveWithoutSave() {
+      // 关闭连接
+      if (currentSse) { currentSse.abort(); currentSse = null; }
+      if (controlWs) { controlWs.close(); controlWs = null; }
+      showLeaveConfirm.value = false;
+      isViewingHistory.value = false;
+      const snap = resumeSnapshot.value;
+      messages.value = [];
+      meetingId.value = null;
+      meetingState.value = null;
+      if (_leaveTarget.value === 'home') {
+        currentPage.value = 'home';
+        loadSessions();
+      } else {
+        restoreFromSnapshot(snap);
+        currentPage.value = 'setup';
+      }
+    }
+
+    function handleEvent(evt) {
+      // 旧后端事件处理（历史会话用），不再使用
+    }
+
+    async function viewSession(s) {
+      const res = await fetch(`${API}/history/${s.id}`);
+      const record = await res.json();
+
+      const isEnded = record.state === 'ended';
+      const isAudienceQA = record.state === 'audience_qa';
+
+      // 恢复配置（从历史记录里的 host_config / guests_config）
+      const hc = record.host_config || {};
+      const gc = record.guests_config || [];
+      historicConfig.value = {
+        hostId: hc.id || '',
+        hostName: hc.name || '',
+        hostColor: hc.color || '#f5a623',
+        hostConfig: hc,
+        guestConfigs: gc,
+        topic: record.topic,
+        discussion_title: record.discussion_title || null,
+        hostStyle: record.host_style || '',
+        meetingId: record.id,
+        state: record.state,
+        agenda: record.agenda || null,
+        materials: record.materials || [],
+      };
+
+      // 不管已结束还是未结束，都进对话页展示历史消息
+      // 根据 section_idx 变化自动插入板块分隔线
+      const history = record.history || [];
+      // 兼容两种 agenda 格式：list 直接用 / dict 取 sections
+      const rawAgenda = record.agenda || null;
+      let agendaSections = [];
+      if (Array.isArray(rawAgenda)) {
+        agendaSections = rawAgenda;
+      } else if (rawAgenda && typeof rawAgenda === 'object' && rawAgenda.sections) {
+        agendaSections = rawAgenda.sections;
+      }
+      const sectionTitles = agendaSections.map((s, i) => s.title || s.description || `第${i+1}环节`);
+
+      const loaded = [];
+      let lastSectionIdx = -1;
+      for (let i = 0; i < history.length; i++) {
+        const m = history[i];
+        const curSectionIdx = m.section_idx ?? -1;
+
+        // 当 section_idx 变化时（且不是第一条消息），插入板块分隔线
+        if (curSectionIdx !== lastSectionIdx && curSectionIdx >= 0) {
+          const secTitle = curSectionIdx < sectionTitles.length ? sectionTitles[curSectionIdx] : `第 ${curSectionIdx + 1} 板块`;
+          loaded.push({
+            id: 'sec_' + curSectionIdx + '_' + Date.now(),
+            type: 'section_start',
+            content: '📍 ' + secTitle,
+            color: '#3b82f6',
+          });
+          lastSectionIdx = curSectionIdx;
+        }
+
+        loaded.push({
+          id: 'hist_' + i,
+          type: m.speaker_type === 'user' ? 'user' : 'agent',
+          speakerId: m.speaker_id,
+          speakerName: m.speaker_name,
+          speakerType: m.speaker_type,
+          isHost: m.speaker_id === 'host',
+          color: m.color || '#4f8ef7',
+          name: m.speaker_name,
+          content: m.content,
+          streaming: false,
+          section: (curSectionIdx >= 0 && curSectionIdx < sectionTitles.length) ? sectionTitles[curSectionIdx] : '',
+        });
+      }
+      messages.value = loaded;
+
+      if (record.summary) {
+        summaryContent.value = record.summary;
+        messages.value.push({
+          id: 'summary_hist',
+          type: 'message',
+          speakerId: 'system',
+          speakerName: '会议总结',
+          speakerType: 'system',
+          isHost: false,
+          color: '#888',
+          content: record.summary,
+          streaming: false,
+        });
+      }
+
+      meetingState.value = record.state || 'ended';
+      isDiscussing.value = false;
+      isViewingHistory.value = true;
+
+      // 恢复参与者信息（让顶栏显示）
+      sessionLeader.value = hc.id ? { id: hc.id, name: hc.name, color: hc.color||'#f59e0b', role_prompt: hc.role_prompt||'', platform: hc.platform||'', model: hc.model||'', is_leader: true } : null;
+      sessionMembers.value = gc.map(g => ({ id: g.id, name: g.name, color: g.color||'#4f8ef7', role_prompt: g.role_prompt||'', platform: g.platform||'', model: g.model||'', is_leader: false }));
+
+      // 恢复议程（让进度条显示）
+      if (record.agenda) {
+        const ag = record.agenda;
+        meetingAgenda.value = Array.isArray(ag) ? ag : (ag.sections || []);
+        // 已结束的会谈，所有板块都标记完成
+        const totalSections = meetingAgenda.value.length;
+        meetingCurrentSection.value = isEnded ? totalSections : 0;
+      }
+
+      // 恢复嘉宾状态
+      if (gc.length) {
+        guestStatuses.value = gc.map(g => ({ id: g.id, name: g.name, color: g.color||'#4f8ef7', status: 'ready' }));
+      }
+
+      // 状态文字
+      if (isEnded) {
+        statusText.value = t('chat.meeting_done');
+      } else if (isAudienceQA) {
+        statusText.value = t('chat.audience_qa');
+      } else {
+        statusText.value = `${record.topic}`;
+      }
+      summaryContent.value = record.summary || '';
+
+      // 拆分话题字段，确保 saveSnapshot 能取到正确值
+      const sp4 = splitTopic(record.discussion_title, record.topic);
+      topicTitle.value = sp4.title;
+      topicContent.value = sp4.content;
+
+      // 进入对话页时冻结快照
+      saveSnapshot(record.id);
+      currentPage.value = 'chat';
+    }
+
+    function _applyHistoricConfig(record, clearMessages = true) {
+      // 把历史记录里的配置预填到配置页
+      const sp3 = splitTopic(record.discussion_title, record.topic);
+      topicTitle.value = sp3.title;
+      topicContent.value = sp3.content;
+      // 尝试匹配 agents 列表里的 id
+      const hc = record.host_config || {};
+      const gc = record.guests_config || [];
+      const matchedLeader = agents.value.find(a => a.id === hc.id || a.name === hc.name);
+      if (matchedLeader) selectedLeaderId.value = matchedLeader.id;
+      const matchedMembers = gc.map(g => agents.value.find(a => a.id === g.id || a.name === g.name)).filter(Boolean);
+      selectedMemberIds.value = matchedMembers.map(a => a.id);
+      if (clearMessages) messages.value = [];
+    }
+
+    async function deleteSession(id) {
+      if (!confirm('确定删除这条历史记录？')) return;
+      await fetch(`${API}/history/${id}`, { method: 'DELETE' });
+      sessions.value = sessions.value.filter(s => s.id !== id);
+    }
+
+
+    function closeModelModal() {
+      showModelModal.value = false;
+      editingModelIdx.value = -1;
+      modelForm.value = { label:'', platform:'custom', model:'', apiKey:'', baseUrl:'' };
+      testResult.value = null;
+      showModelForm.value = false;
+    }
+
+    function cancelEditModel() {
+      editingModelIdx.value = -1;
+      modelForm.value = { label:'', platform:'custom', model:'', apiKey:'', baseUrl:'' };
+      testResult.value = null;
+      showModelForm.value = false;
+    }
+
+    function editModel(idx) {
+      const m = userModels.value[idx];
+      modelForm.value = { label: m.label, platform: m.platform, model: m.model, apiKey: m.apiKey, baseUrl: m.baseUrl || '' };
+      editingModelIdx.value = idx;
+    }
+
+    const testResult = ref(null);
+    const testLoading = ref(false);
+    const showModelForm = ref(false);
+
+    async function testModel() {
+      const f = modelForm.value;
+      const isOllama = f.platform === 'ollama';
+      if (!f.model || (!isOllama && !f.apiKey)) {
+        testResult.value = { ok: false, msg: isOllama ? '请先填写模型名称' : '请先填写模型名称和 API Key' };
+        return;
+      }
+      testLoading.value = true;
+      testResult.value = null;
+      try {
+        const baseUrl = f.baseUrl || platformDefaults[f.platform]?.url || 'https://api.openai.com/v1';
+        const url = baseUrl.replace(/\/$/, '') + '/chat/completions';
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${f.apiKey}` },
+          body: JSON.stringify({ model: f.model, messages: [{ role:'user', content:'hi' }], max_tokens: 5, stream: false }),
+        });
+        if (resp.ok) {
+          testResult.value = { ok: true, msg: '连接成功，可以保存' };
+        } else {
+          const err = await resp.json().catch(() => ({}));
+          testResult.value = { ok: false, msg: `HTTP ${resp.status}：${err?.error?.message || resp.statusText}` };
+        }
+      } catch(e) {
+        testResult.value = { ok: false, msg: `网络错误：${e.message}` };
+      } finally {
+        testLoading.value = false;
+      }
+    }
+
+    function saveModel() {
+      if (!modelForm.value.label || !modelForm.value.model || !modelForm.value.apiKey) {
+        alert(t('alert.model_required'));
+        return;
+      }
+      const m = {
+        label: modelForm.value.label, platform: modelForm.value.platform,
+        model: modelForm.value.model, apiKey: modelForm.value.apiKey,
+        baseUrl: modelForm.value.baseUrl || platformDefaults[modelForm.value.platform]?.url || '',
+      };
+      if (editingModelIdx.value >= 0) {
+        userModels.value[editingModelIdx.value] = m;
+      } else {
+        userModels.value.push(m);
+      }
+      localStorage.setItem(MODELS_KEY, JSON.stringify(userModels.value));
+      editingModelIdx.value = -1;
+      modelForm.value = { label:'', platform:'custom', model:'', apiKey:'', baseUrl:'' };
+      testResult.value = null;
+      showModelForm.value = false;
+    }
+
+    function deleteModel(idx) {
+      if (!confirm(`确定删除「${userModels.value[idx].label}」？`)) return;
+      userModels.value.splice(idx, 1);
+      localStorage.setItem(MODELS_KEY, JSON.stringify(userModels.value));
+    }
+
+    function platformIcon(p) {
+      const map = { openai:'OAI', qianfan:'QF', hunyuan:'HY', custom:'API' };
+      return map[p] || 'M';
+    }
+
+    // 根据 label/baseUrl/model 字段判断品牌，返回 logo URL（优先）或 emoji
+    function brandLogoUrl(m) {
+      const s = ((m.label||'') + (m.baseUrl||'') + (m.model||'')).toLowerCase();
+      if (s.includes('mimo') || s.includes('xiaomimimo') || s.includes('xiaomi')) return 'https://platform.xiaomimimo.com/favicon.874c9507.png';
+      if (s.includes('deepseek'))  return 'https://www.deepseek.com/favicon.ico';
+      if (s.includes('openai') || s.includes('gpt'))  return 'https://openai.com/favicon.ico';
+      if (s.includes('claude') || s.includes('anthropic')) return 'https://www.anthropic.com/favicon.ico';
+      if (s.includes('gemini') || s.includes('google')) return 'https://www.gstatic.com/lamda/images/gemini_favicon_f069958c85030456e93de685481c559f160ea06.svg';
+      if (s.includes('siliconflow') || s.includes('siliconcloud')) return 'https://siliconflow.cn/favicon.ico';
+      if (s.includes('dashscope') || s.includes('qwen') || s.includes('通义') || s.includes('千问')) return 'https://img.alicdn.com/imgextra/i4/O1CN01Qd3F9s1ilWmLJo56P_!!6000000004453-55-tps-51-51.svg';
+      if (s.includes('moonshot') || s.includes('kimi')) return 'https://www.moonshot.cn/favicon.ico';
+      if (s.includes('zhipu') || s.includes('glm') || s.includes('智谱')) return 'https://www.zhipuai.cn/favicon.ico';
+      if (s.includes('baichuan') || s.includes('百川')) return 'https://www.baichuan-ai.com/favicon.ico';
+      if (s.includes('spark') || s.includes('讯飞') || s.includes('xunfei')) return 'https://xinghuo.xfyun.cn/favicon.ico';
+      if (s.includes('hunyuan') || s.includes('混元')) return 'https://cdn-portal.hunyuan.tencent.com/public/static/logo/favicon.png';
+      if (s.includes('ollama')) return 'https://ollama.com/public/icon-16x16.png';
+      return null;
+    }
+
+    function scrollBottom() {
+      nextTick(() => { if (chatArea.value) chatArea.value.scrollTop = chatArea.value.scrollHeight; });
+    }
+
+    function autoResize(e) {
+      e.target.style.height = 'auto';
+      e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
+    }
+
+    function formatDate(d) {
+      return new Date(d).toLocaleString('zh-CN', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    }
+
+    // 表单内容变动时，清除之前的测试结果
+    const { watch } = Vue;
+    watch(modelForm, () => { testResult.value = null; }, { deep: true });
+
+    onMounted(async () => {
+      // 并行加载，任一失败不影响另一个
+      await Promise.allSettled([loadAgents(), loadSessions()]);
+      // 意外刷新/关闭时，尝试保存当前会谈（同步请求，浏览器会等待完成）
+      window.addEventListener('beforeunload', (e) => {
+        if (!meetingId.value) return;
+        // 使用 sendBeacon 确保页面卸载时仍能发出请求
+        const payload = new Blob([], { type: 'application/json' });
+        navigator.sendBeacon(`${API}/meetings/${meetingId.value}/save`, payload);
+      });
+    });
+
+    return {
+      currentPage, isViewingHistory,
+      agents, sessions, messages, topicTitle, topicContent, chatInput,
+      selectedLeaderId, selectedMemberIds,
+      isDiscussing, statusText,
+      meetingId, meetingState, meetingAgenda, meetingCurrentSection,
+      guestStatuses, agendaFeedback, isPaused, callTarget,
+      confirmAgenda, regenerateAgenda, sendControl, callOnGuest,
+      pendingFiles, historicMaterials, onFileSelect, removePendingFile,
+      showModal, showModelModal, showTavilyModal, tavilyKey, tavilyKeyInput, saveTavilyKey,
+      editingAgent, editingModelIdx,
+      form, modelForm, userModels, platformDefaults,
+      chatArea, inputRef, emojis, colors,
+      sessionLeader, sessionMembers, leaderAgents, memberAgents, canStart,
+      goHome, goSetup, goSetupFromHistory, downloadSummary,
+      loadAgents, toggleMember, openAddAgent, openEditAgent, openEditSessionAgent, quickDeleteAgent, saveAgent, deleteAgent,
+      startDiscussion, resumeOrNewMeeting, sendFollowUp, sendAudienceQuestion, generateSummary, saveSummaryTxt, stopDiscussion, confirmLeave, leaveWithSave, leaveWithoutSave, reConfigFromHistory, resumeDiscussion,
+      viewSession, deleteSession,
+      saveModel, editModel, deleteModel, closeModelModal, cancelEditModel, platformIcon, brandLogoUrl, onPlatformChange,
+      testResult, testLoading, testModel, showModelForm,
+      // 智能增强
+      showSmartModal, smartTab, smartTabs, smartConfiguredCount,
+      embConfig, embForm, embTestResult, embTestLoading, saveEmbConfig, clearEmbConfig, testEmbConnection, onEmbPlatformChange,
+      hostStyle, hostStyles,
+      autoResize, formatDate,
+      showLeaveConfirm, summaryContent, historicConfig, showNewMeetingConfirm, confirmNewMeeting, cancelNewMeeting, resumeSnapshot,
+      // i18n
+      currentLang,
+      t(key) { return I18N.t(key); },
+      toggleLang() {
+        const newLang = currentLang.value === 'zh' ? 'en' : 'zh';
+        I18N.switchLang(newLang);
+        // 刷新页面让所有文本重新渲染
+        location.reload();
+      },
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
